@@ -47,7 +47,7 @@
        emergencyW. |    |    | extendLock  v
        topUp ------/    |    |        +----+-----+
                         |    |        |   User   |
-              (опц.) checkIn |        +----+-----+
+                     checkIn |        +----+-----+
                              |             ^
                              |             | penalty
                              v             v
@@ -143,7 +143,8 @@
 - **Effects:**
   1. `vault = Clones.clone(implementation)`.
   2. `vaultCount++`.
-  3. `vaultsByOwner[msg.sender].push(vault)` (опционально, см. open question 2).
+  3. `vaultsByOwner[msg.sender].push(vault)` (решение open question 2:
+     mapping в Factory).
 - **Interactions:**
   1. **ERC-20 ветка:**
      - `balanceBefore = IERC20(asset).balanceOf(vault)`.
@@ -202,7 +203,7 @@
 - `feeReceiver() view returns (address)`.
 - `vaultCount() view returns (uint256)`.
 - `getVaultsByOwner(address user) view returns (address[] memory)` —
-  опционально, см. open question 2.
+  штатно (решение open question 2: mapping в Factory).
 - `paused() view returns (bool)` (из Pausable).
 - `owner() view returns (address)` / `pendingOwner() view returns (address)` (из Ownable2Step).
 
@@ -331,7 +332,7 @@ delegatecall. Различие только в том, что в implementation
 - **Interactions:** нет.
 - **Events:** `LockExtended(oldUnlockTimestamp, newUnlockTimestamp)`.
 
-### `checkIn() external` (опционально, см. open question 1)
+### `checkIn() external`
 - **Visibility:** external.
 - **Modifiers:** нет.
 - **Кто может вызвать:** vaultOwner.
@@ -341,6 +342,7 @@ delegatecall. Различие только в том, что в implementation
 - **Effects:** нет.
 - **Interactions:** нет.
 - **Events:** `CheckedIn(owner, block.timestamp)`.
+- Решение open question 1: функция штатная, не опциональная.
 
 ### View-функции
 - `owner() view returns (address)`.
@@ -666,3 +668,25 @@ Vault создан впервые» и не меняется никогда. `cu
     - ПОСЛЕ: Factory знает `actualAmount`, передаёт в `initialize`.
       Корректно для fee-on-transfer. Унифицирует ETH и ERC-20 потоки.
     - **Моё предложение: ПОСЛЕ.** Это согласуется с защитой 3.
+
+---
+
+## Зафиксированные решения по open questions (Фаза 0 закрыта)
+
+| # | Вопрос | Решение | Что меняет в архитектуре |
+|---|---|---|---|
+| 1 | `checkIn()` в V1 | **Оставить.** | Штатная функция Vault + event `CheckedIn`. |
+| 2 | Индексация Vault'ов | **Mapping `vaultsByOwner` в Factory.** | `vaultsByOwner` mapping и `getVaultsByOwner` view — обязательны. |
+| 3 | Penalty при `topUp` | **Игнорируем edge case** (вариант A). | Простая формула на основе `amount` и `lockStartedAt`, без массива депозитов. |
+| 4 | Penalty при `extendLock` | **`lockStartedAt = block.timestamp`** при extend (вариант B). | В storage Vault'а есть поле `lockStartedAt`, обновляется в `extendLock`. |
+| 5 | Fee-on-transfer | **Поддерживаем через `balanceOf` delta.** | `balanceOf` до/после в `Factory.createVault` (ERC-20 ветка) и `Vault.topUp` (ERC-20 ветка). |
+| 6 | Rebasing-токены | **Документируем риск,** не блокируем технически. | Без изменений в контрактах. Whitelist — Фаза 2. |
+| 7 | Transfer Vault ownership | **НЕТ в V1.** | На Vault нет `transferOwnership`. `owner` зафиксирован в `initialize`. |
+| 8 | `emergencyWithdraw` после `unlockTimestamp` | **Revert `UseWithdrawInstead()`.** | Дополнительный check в `emergencyWithdraw`. |
+| 9 | `topUp` после `unlockTimestamp` | **Revert.** | Дополнительный check в `topUp`. |
+| 10 | `MAX_LOCK_DURATION` при `extendLock` | **От `now`.** | `extendLock` проверяет `newUnlockTimestamp − block.timestamp ≤ MAX_LOCK_DURATION`. |
+| 11 | Интерфейс `IDiamondHandsVault` | **Ввести.** | Отдельный interface-файл, Factory вызывает Vault через него. |
+| 12 | Порядок `createVault`: initialize ДО/ПОСЛЕ | **ПОСЛЕ перевода.** | Factory сначала переводит средства, потом вызывает `initialize(..., actualAmount, ...)`. |
+
+Эти решения фиксируют публичный API контрактов и storage layout для
+Фазы 1. Можно переходить к написанию Solidity.

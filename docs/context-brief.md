@@ -127,7 +127,7 @@ on-chain хранилище на заданный срок. Цель — физ�
 - `LockExtended(uint256 oldUnlockTimestamp, uint256 newUnlockTimestamp)`
 - `ImplementationUpdated(address indexed oldImpl, address indexed newImpl)` — на Factory
 - `FeeReceiverUpdated(address indexed oldReceiver, address indexed newReceiver)` — на Factory
-- (опционально) `CheckedIn(address indexed owner, uint256 timestamp)`
+- `CheckedIn(address indexed owner, uint256 timestamp)`
 
 ---
 
@@ -141,7 +141,8 @@ on-chain хранилище на заданный срок. Цель — физ�
 - **Продуктовая аналитика** — создания, withdraw vs emergency, средний
   lock, retention по weeks, конверсия Soft→Hard.
 - **Backend stack** — TBD. Для V1, возможно, не нужен вовсе: фронт может
-  работать на RPC + indexer.
+  работать на RPC + `vaultsByOwner` mapping в Factory (решение open
+  question 2).
 - **Anti-fraud / wash check** — не нужен в V1, это не казино и не торговая
   площадка. Опционально проверять что owner-адрес не контракт (защита
   от случайных «потерянных» вкладов на адрес без приватного ключа), но
@@ -170,7 +171,8 @@ on-chain хранилище на заданный срок. Цель — физ�
 - `topUp(uint256)` — добавить тот же актив. Для ETH — через `msg.value`,
   для ERC-20 — через `safeTransferFrom`.
 - `extendLock(uint256)` — продлить срок (только в большую сторону).
-- (опционально) `checkIn()` — no-op + event. См. open question 1.
+- `checkIn()` — no-op + event. Решение по open question 1: оставляем
+  в V1 как WTU-friendly «штамп присутствия».
 
 **Anyone:**
 - Все view-функции Vault и Factory (read-only).
@@ -277,8 +279,8 @@ callback'ов после Effects, потому что initialize вызывае�
 - `topUp` близко к анлоку (потенциальный «арбитраж» штрафа): edge case
   задокументирован. См. open question 3.
 
-**checkIn (если оставляем):**
-- Только проверка `owner` + `!withdrawn`. Без эффектов.
+**checkIn:**
+- Только проверка `owner` + `!withdrawn`. Без эффектов, только event.
 
 ---
 
@@ -349,6 +351,27 @@ callback'ов после Effects, потому что initialize вызывае�
 - wagmi + viem
 
 **Бэкенд (Фаза 2):**
-- **TBD.** Возможно вообще не нужен в V1: фронт может работать на
-  RPC + indexer. Окончательное решение по индексации (mapping в Factory
-  vs The Graph) определит, нужен ли отдельный бэк-сервис.
+- **TBD.** Для V1, скорее всего, не нужен: фронт работает на
+  RPC + `vaultsByOwner` mapping в Factory (см. решение open question 2).
+
+---
+
+## 12. Зафиксированные решения по open questions (Фаза 0 закрыта)
+
+| # | Вопрос | Решение |
+|---|---|---|
+| 1 | `checkIn()` в V1 | **Оставить** (штатная функция Vault). |
+| 2 | Индексация Vault'ов по owner | **Mapping `vaultsByOwner` в Factory.** |
+| 3 | Penalty при `topUp` | **Игнорируем edge case** (вариант A). |
+| 4 | Penalty при `extendLock` | **`lockStartedAt = block.timestamp`** на extend (вариант B). |
+| 5 | Fee-on-transfer токены | **Поддерживаем через `balanceOf` delta.** |
+| 6 | Rebasing-токены | **Документируем риск в UI + README,** не блокируем технически. Whitelist — кандидат в Фазу 2. |
+| 7 | Transfer Vault ownership | **НЕТ в V1.** Кандидат на Фазу 2 через NFT-receipt. |
+| 8 | `emergencyWithdraw` после `unlockTimestamp` | **Revert `UseWithdrawInstead()`.** Фронт сам подменяет кнопку. |
+| 9 | `topUp` после `unlockTimestamp` | **Запрещаем (revert).** |
+| 10 | `MAX_LOCK_DURATION` при `extendLock` | **От `now`** (`newUnlockTimestamp − block.timestamp ≤ MAX_LOCK_DURATION`). |
+| 11 | Интерфейс `IDiamondHandsVault` | **Вводим.** Используется для типобезопасного вызова `Factory → Vault.initialize`. |
+| 12 | Порядок `createVault`: `initialize` ДО/ПОСЛЕ перевода | **ПОСЛЕ.** Factory знает `actualAmount`, передаёт его в `initialize`. Корректно для fee-on-transfer. |
+
+Эти решения фиксируют публичный API контрактов и storage layout для
+Фазы 1.
