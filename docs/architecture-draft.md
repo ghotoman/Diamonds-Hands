@@ -12,6 +12,11 @@
                          |  DiamondHandsFactory    |
                          |  (один на сеть)         |
                          |                         |
+                         |  наследует:             |
+                         |   Ownable2Step,         |
+                         |   Pausable,             |
+                         |   ReentrancyGuard       |
+                         |                         |
                          |  state:                 |
                          |   - implementation      |
                          |   - feeReceiver         |
@@ -23,7 +28,8 @@
                                       |
                                       | createVault(asset, amount,
                                       |             unlockTimestamp,
-                                      |             allowEarlyExit)
+                                      |             allowEarlyExit,
+                                      |             maxPenaltyBps)
                                       v
                        +------------------------------+
                        | Clones.clone(implementation) |
@@ -40,7 +46,8 @@
               |    owner, asset, amount,                    |
               |    createdAt, lockStartedAt,                |
               |    unlockTimestamp, allowEarlyExit,         |
-              |    withdrawn, feeReceiver                   |
+              |    withdrawn, feeReceiver,                  |
+              |    maxPenaltyBps                            |
               +----+----+----+----+--------+---------+------+
                    ^    ^    ^    ^        ^         |
        withdraw  / |    |    |    |        | payout to owner
@@ -78,8 +85,10 @@
 
 ### Поток создания одного Vault
 
-1. User → `Factory.createVault{value: ethAmount или 0}(asset, amount, unlockTs, allowEarlyExit)`.
-2. Factory проверяет параметры (MIN/MAX, mode, paused, msg.value).
+1. User → `Factory.createVault{value: ethAmount или 0}(asset, amount, unlockTs, allowEarlyExit, maxPenaltyBps)`.
+2. Factory проверяет параметры (MIN/MAX, mode, paused, msg.value,
+   диапазон `maxPenaltyBps` для выбранного mode). `nonReentrant`
+   modifier на этом этапе ставит guard.
 3. Factory → `Clones.clone(implementation)` → новый адрес `vault`.
 4. Factory → `vaultCount++`, `vaultsByOwner[user].push(vault)`.
 5. Factory переводит средства в `vault`:
@@ -87,9 +96,9 @@
    - ERC-20: измеряет `balanceBefore` на `vault`, делает
      `safeTransferFrom(user → vault, amount)`, измеряет `balanceAfter`,
      считает `actualAmount = balanceAfter − balanceBefore`.
-6. Factory → `IDiamondHandsVault(vault).initialize(user, asset, actualAmount, unlockTs, allowEarlyExit, currentFeeReceiver)`.
+6. Factory → `IDiamondHandsVault(vault).initialize(user, asset, actualAmount, unlockTs, allowEarlyExit, currentFeeReceiver, maxPenaltyBps)`.
 7. Vault.initialize сохраняет state.
-8. Factory эмитит `VaultCreated(user, vault, asset, actualAmount, unlockTs, allowEarlyExit)`.
+8. Factory эмитит `VaultCreated(user, vault, asset, actualAmount, unlockTs, allowEarlyExit, currentFeeReceiver, maxPenaltyBps)`.
 
 ### Поток withdraw
 
@@ -102,12 +111,25 @@
 1. User (== `Vault.owner`) → `vault.emergencyWithdraw()`.
 2. Checks (`allowEarlyExit`, `!withdrawn`, до анлока).
 3. Effects: расчёт penalty, `withdrawn = true`, обнулить amount.
-4. Interactions: `(amount − penalty)` → user, `penalty` → feeReceiver.
+4. Interactions:
+   - `(amount − penalty)` → user (всегда).
+   - `penalty` → feeReceiver **только если `penaltyAmt > 0`** (защита
+     от старых ERC-20, реверящих на transfer 0).
 5. Event `EmergencyWithdrawn(owner, amountToOwner, penaltyAmount)`.
 
 ---
 
 ## DiamondHandsFactory — функции
+
+**Наследование:** `Ownable2Step`, `Pausable`, `ReentrancyGuard`.
+
+**Константы (immutable / constant в контракте):**
+- `MIN_LOCK_DURATION = 7 days`.
+- `MAX_LOCK_DURATION = 1825 days` (5 лет).
+- `MIN_ETH_AMOUNT = 1e15` (0.001 ETH).
+- `MIN_USER_PENALTY_BPS = 500` (5%).
+- `ABS_MAX_PENALTY_BPS = 3000` (30%).
+- `BPS_DENOMINATOR = 10000`.
 
 ### `constructor(address _implementation, address _feeReceiver)`
 - **Visibility:** public (вызывается deployer'ом).
@@ -125,9 +147,9 @@
   - `FeeReceiverUpdated(address(0), _feeReceiver)`.
 - **Interactions:** нет.
 
-### `createVault(address asset, uint256 amount, uint256 unlockTimestamp, bool allowEarlyExit) external payable returns (address vault)`
+### `createVault(address asset, uint256 amount, uint256 unlockTimestamp, bool allowEarlyExit, uint16 maxPenaltyBps) external payable returns (address vault)`
 - **Visibility:** external payable.
-- **Modifiers:** `whenNotPaused`.
+- **Modifiers:** `whenNotPaused`, **`nonReentrant`** (обязательно — см. защиту 7).
 - **Кто может вызвать:** anyone.
 - **Checks (в порядке CEI):**
   1. `!paused()` (через modifier).
@@ -140,6 +162,13 @@
   6. Если `asset != address(0)` (ERC-20 режим):
      - `msg.value == 0`.
      - `asset.code.length > 0`.
+  7. **Валидация `maxPenaltyBps`:**
+     - Если `allowEarlyExit == true` (soft mode):
+       - `maxPenaltyBps >= MIN_USER_PENALTY_BPS` (500).
+       - `maxPenaltyBps <= ABS_MAX_PENALTY_BPS` (3000).
+     - Если `allowEarlyExit == false` (hard mode):
+       - `maxPenaltyBps == 0` (строгий нуль — защита от UX-ошибки
+         на фронте).
 - **Effects:**
   1. `vault = Clones.clone(implementation)`.
   2. `vaultCount++`.
@@ -155,13 +184,15 @@
   2. **ETH ветка:**
      - `(bool ok,) = vault.call{value: msg.value}("")`; require ok.
      - `actualAmount = msg.value`.
-  3. `IDiamondHandsVault(vault).initialize(msg.sender, asset, actualAmount, unlockTimestamp, allowEarlyExit, feeReceiver)`.
+  3. `IDiamondHandsVault(vault).initialize(msg.sender, asset, actualAmount, unlockTimestamp, allowEarlyExit, feeReceiver, maxPenaltyBps)`.
 - **Events:**
-  - `VaultCreated(msg.sender, vault, asset, actualAmount, unlockTimestamp, allowEarlyExit)`.
+  - `VaultCreated(msg.sender, vault, asset, actualAmount, unlockTimestamp, allowEarlyExit, feeReceiver, maxPenaltyBps)` — 8 полей.
 - **External interactions с untrusted кодом:** да (ERC-20 transferFrom).
   Поэтому Effects (clone + counter + mapping) идут ДО transferFrom. После
   transferFrom вызывается initialize — это вызов нашего же клон-кода, не
-  untrusted, но всё равно строго после Effects на Factory.
+  untrusted, но всё равно строго после Effects на Factory. `nonReentrant`
+  закрывает целый класс атак через злонамеренный/баг-токен, делающий
+  reentry в createVault.
 
 ### `setImplementation(address newImpl) external onlyOwner`
 - **Visibility:** external.
@@ -221,8 +252,8 @@ delegatecall. Различие только в том, что в implementation
 - **Тело:** только `_disableInitializers()`. Никакого state.
 - **Цель:** защитить implementation от прямой инициализации.
 
-### `initialize(address _owner, address _asset, uint256 _amount, uint256 _unlockTimestamp, bool _allowEarlyExit, address _feeReceiver) external initializer`
-- **Visibility:** external.
+### `initialize(address _owner, address _asset, uint256 _amount, uint256 _unlockTimestamp, bool _allowEarlyExit, address _feeReceiver, uint16 _maxPenaltyBps) external initializer`
+- **Visibility:** external. **7 аргументов.**
 - **Modifiers:** `initializer` (OpenZeppelin Initializable).
 - **Кто может вызвать:** anyone — но по факту только Factory в той же
   транзакции, что и clone. `initializer` modifier гарантирует
@@ -233,6 +264,11 @@ delegatecall. Различие только в том, что в implementation
   2. `_amount > 0`.
   3. `_unlockTimestamp > block.timestamp`.
   4. `_feeReceiver != address(0)`.
+  5. Страховка совместимости `_allowEarlyExit` и `_maxPenaltyBps`:
+     - Если `_allowEarlyExit == false` → require `_maxPenaltyBps == 0`.
+     - Если `_allowEarlyExit == true` → require `_maxPenaltyBps != 0`
+       (Factory уже проверил полный диапазон; Vault проверяет инвариант
+       «soft mode имеет ненулевой штраф» как двойную страховку).
 - **Effects:**
   - `owner = _owner`.
   - `asset = _asset`.
@@ -243,6 +279,7 @@ delegatecall. Различие только в том, что в implementation
   - `allowEarlyExit = _allowEarlyExit`.
   - `withdrawn = false`.
   - `feeReceiver = _feeReceiver`.
+  - `maxPenaltyBps = _maxPenaltyBps`.
 - **Events:** нет (Factory эмитит `VaultCreated` после initialize).
 - **Interactions:** нет.
 
@@ -281,10 +318,17 @@ delegatecall. Различие только в том, что в implementation
 - **Interactions:**
   - ETH:
     - `(bool ok1,) = owner.call{value: payout}("")`; require ok1.
-    - `(bool ok2,) = feeReceiver.call{value: penaltyAmt}("")`; require ok2.
+    - `if (penaltyAmt > 0)` then `(bool ok2,) = feeReceiver.call{value: penaltyAmt}("")`; require ok2.
   - ERC-20:
     - `IERC20(asset).safeTransfer(owner, payout)`.
-    - `IERC20(asset).safeTransfer(feeReceiver, penaltyAmt)`.
+    - `if (penaltyAmt > 0)` then `IERC20(asset).safeTransfer(feeReceiver, penaltyAmt)`.
+  - **Защита transfer 0:** некоторые ERC-20 реверят на `transfer(_, 0)`,
+    также по принципу безопасности избегаем лишнего внешнего вызова
+    при нулевом значении. Когда `penaltyAmt == 0` (например, в последние
+    секунды до анлока — `penaltyBps` округляется в 0), отправка на
+    `feeReceiver` пропускается. Пользователь получает 100% от `amount`.
+    Это согласуется с инвариантом penalty-кривой: на `unlockTimestamp`
+    штраф = 0.
 - **Events:** `EmergencyWithdrawn(owner, payout, penaltyAmt)`.
 
 ### `topUp(uint256 addAmount) external payable nonReentrant`
@@ -354,6 +398,7 @@ delegatecall. Различие только в том, что в implementation
 - `allowEarlyExit() view returns (bool)`.
 - `withdrawn() view returns (bool)`.
 - `feeReceiver() view returns (address)`.
+- `maxPenaltyBps() view returns (uint16)`.
 - `timeLeft() view returns (uint256)` — 0, если `block.timestamp >= unlockTimestamp`.
 - `currentPenaltyBps() view returns (uint256)` — см. псевдокод ниже.
 - `currentPenaltyAmount() view returns (uint256)` — см. псевдокод ниже.
@@ -430,22 +475,19 @@ createVault:
 | `Factory.createVault` (ETH) | params + msg.value | clone + counters | send ETH → vault, initialize |
 | `Factory.createVault` (ERC-20) | params + msg.value==0 | clone + counters | safeTransferFrom user → vault, initialize |
 | `Vault.withdraw` | owner, time, !withdrawn | `withdrawn=true`, `amount=0` | send to owner |
-| `Vault.emergencyWithdraw` | owner, allowEarlyExit, !withdrawn, до анлока | penalty calc, `withdrawn=true`, `amount=0` | send to owner, send to feeReceiver |
+| `Vault.emergencyWithdraw` | owner, allowEarlyExit, !withdrawn, до анлока | penalty calc, `withdrawn=true`, `amount=0` | send to owner, send to feeReceiver **только если penaltyAmt > 0** |
 | `Vault.topUp` (ETH) | owner, !withdrawn, до анлока, msg.value==addAmount | `amount += msg.value` | — (ETH уже пришло) |
 | `Vault.topUp` (ERC-20) | owner, !withdrawn, до анлока, msg.value==0 | (после Interactions) `amount += delta` | safeTransferFrom + balanceOf delta |
 | `Vault.extendLock` | owner, !withdrawn, до анлока, newTs > oldTs, лимит | `unlockTimestamp`, `lockStartedAt` | — |
 | `Vault.checkIn` | owner, !withdrawn | — | — |
 
 **`ReentrancyGuard.nonReentrant`** ставим на:
-- `Vault.withdraw`
-- `Vault.emergencyWithdraw`
-- `Vault.topUp`
+- `Vault.withdraw` — обязательно.
+- `Vault.emergencyWithdraw` — обязательно.
+- `Vault.topUp` — обязательно.
+- `Factory.createVault` — **обязательно** (см. защиту 7 ниже).
 
 На `extendLock` и `checkIn` не нужно (нет внешних вызовов).
-На `Factory.createVault` — необязательно (после Effects вызываются
-только наш доверенный код клона + ERC-20 transferFrom, который мог бы
-делать callback, но к этому моменту state уже консистентен).
-Можно поставить «для парадигмы», стоит дёшево.
 
 ### 5. renounceOwnership заблокирован на Factory
 
@@ -479,6 +521,41 @@ function renounceOwnership() public override {
   старые останутся со старым адресом. Это правильное поведение
   для V1.
 
+### 7. nonReentrant на Factory.createVault — обязательно
+
+- Factory наследует `ReentrancyGuard` (см. секцию «Наследование»
+  в спецификации Factory).
+- `createVault` помечен `nonReentrant`.
+- **Обоснование:**
+  - `IERC20.safeTransferFrom(user, vault, amount)` передаёт управление
+    в код самого ERC-20 токена. Это **untrusted external call**.
+    Злонамеренный или баг-имеющий токен может попытаться сделать
+    reentry в `createVault` до того, как первоначальный вызов завершил
+    `initialize`.
+  - Между Effects (clone + counter + push в mapping) и Interactions
+    (transferFrom + initialize) проходит несколько внешних вызовов.
+    Без guard'а возможны сценарии вида «токен делает reentry,
+    мейнтейнер пушит фантомный Vault в mapping, и т. п.».
+  - ReentrancyGuard стоит ~2k газа на вызов — дешёвая страховка
+    от целого класса атак, плюс стандартная best practice для функций
+    с external calls и state changes.
+
+### 8. Защита от revert на transfer 0 в emergencyWithdraw
+
+- Некоторые старые / нестандартные ERC-20 реверят на `transfer(_, 0)`.
+- Если `penaltyAmt == 0` (последние секунды до анлока, когда
+  `(maxPenaltyBps * timeLeft) / totalDuration` округляется в 0),
+  отправка нулевой суммы на `feeReceiver` могла бы заблокировать весь
+  `emergencyWithdraw`.
+- **Решение:** в `emergencyWithdraw` обёрнуть отправку penalty
+  в `if (penaltyAmt > 0)`. При нулевом штрафе пользователь получает
+  100% от `amount`, отправка на `feeReceiver` пропускается (и для ETH,
+  и для ERC-20 для единообразия).
+- Это согласуется с инвариантом penalty-кривой: на момент
+  `unlockTimestamp` штраф = 0, и пользователь и так получил бы 100%
+  через обычный `withdraw`. `emergencyWithdraw` с `penaltyAmt == 0`
+  выдаёт тот же результат, не упирается в нестандартный токен.
+
 ---
 
 ## Расчёт penalty — псевдокод
@@ -487,26 +564,35 @@ function renounceOwnership() public override {
 function currentPenaltyBps() returns uint256:
     if block.timestamp >= unlockTimestamp:
         return 0
+    if !allowEarlyExit:
+        return 0   # hard-mode: penalty формально не применим
+                   # (emergencyWithdraw всё равно ревертится),
+                   # но из view-функции отдаём 0 для UI.
     timeLeft = unlockTimestamp - block.timestamp
     totalDuration = unlockTimestamp - lockStartedAt
     # ВНИМАНИЕ: используется lockStartedAt, не createdAt.
     # lockStartedAt сбрасывается в block.timestamp при extendLock.
     # createdAt сохраняется навсегда для аналитики "когда позиция
     # создана впервые".
-    return (MAX_PENALTY_BPS * timeLeft) / totalDuration
+    # maxPenaltyBps — поле Vault, зафиксированное при initialize,
+    # из диапазона [MIN_USER_PENALTY_BPS=500, ABS_MAX_PENALTY_BPS=3000]
+    # для soft-mode и == 0 для hard-mode.
+    return (maxPenaltyBps * timeLeft) / totalDuration
 
 function currentPenaltyAmount() returns uint256:
     return (amount * currentPenaltyBps()) / BPS_DENOMINATOR
 
 Свойства:
-  - penaltyBps ∈ [0, MAX_PENALTY_BPS=2000].
+  - penaltyBps ∈ [0, maxPenaltyBps].
+  - Для soft-mode: maxPenaltyBps ∈ [500, 3000].
+  - Для hard-mode: maxPenaltyBps == 0, penaltyBps всегда == 0.
   - Строго убывает по времени между lockStartedAt и unlockTimestamp.
-  - = MAX_PENALTY_BPS на lockStartedAt.
+  - = maxPenaltyBps на lockStartedAt.
   - = 0 на unlockTimestamp.
   - Целочисленное деление безопасно: timeLeft <= totalDuration,
-    MAX_PENALTY_BPS * timeLeft не переполняет uint256 при
-    реалистичных лимитах (MAX_LOCK_DURATION = 5 лет ≈ 1.58e8 секунд;
-    1.58e8 * 2000 ≈ 3.16e11 — далеко от 2^256).
+    maxPenaltyBps * timeLeft не переполняет uint256 при реалистичных
+    лимитах (MAX_LOCK_DURATION = 5 лет ≈ 1.58e8 секунд;
+    1.58e8 * 3000 ≈ 4.74e11 — далеко от 2^256).
 ```
 
 ### Проблема 1: topUp близко к анлоку
@@ -687,6 +773,7 @@ Vault создан впервые» и не меняется никогда. `cu
 | 10 | `MAX_LOCK_DURATION` при `extendLock` | **От `now`.** | `extendLock` проверяет `newUnlockTimestamp − block.timestamp ≤ MAX_LOCK_DURATION`. |
 | 11 | Интерфейс `IDiamondHandsVault` | **Ввести.** | Отдельный interface-файл, Factory вызывает Vault через него. |
 | 12 | Порядок `createVault`: initialize ДО/ПОСЛЕ | **ПОСЛЕ перевода.** | Factory сначала переводит средства, потом вызывает `initialize(..., actualAmount, ...)`. |
+| 13 | `MAX_PENALTY_BPS` | **Параметризован на уровне Vault**, выбирается пользователем в диапазоне `[500, 3000]` bps в soft mode; принудительно `0` в hard mode. Прежняя константа удалена из контракта. | В storage Vault'а есть поле `uint16 maxPenaltyBps`. `Factory.createVault` и `Vault.initialize` получают параметр `maxPenaltyBps`. `currentPenaltyBps` использует поле, а не константу. Event `VaultCreated` включает `maxPenaltyBps`. В Factory добавлены константы `MIN_USER_PENALTY_BPS=500` и `ABS_MAX_PENALTY_BPS=3000`. |
 
 Эти решения фиксируют публичный API контрактов и storage layout для
 Фазы 1. Можно переходить к написанию Solidity.
