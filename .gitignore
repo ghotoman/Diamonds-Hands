@@ -1,0 +1,27 @@
+# Node (для Фазы 3)
+node_modules/
+.next/
+dist/
+build/
+
+# Foundry
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+contracts/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+
+# Env
+.env
+.env.local
+.env.*.local
+*.env

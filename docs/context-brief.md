@@ -8,7 +8,8 @@
 ## 1. Назначение проекта
 
 Diamond Hands — Web3 миниаппка под Base App (Base L2), которая позволяет
-пользователю заблокировать собственный актив (ETH или ERC-20) в персональном
+пользователю заблокировать собственный ERC-20 актив (мем-коины, токены
+экосистемы Base, токены инфраструктурных проектов) в персональном
 on-chain хранилище на заданный срок. Цель — физически лишить себя возможности
 продать раньше времени и победить «бумажные руки». Все блокировки персональные,
 без custodial-риска: пользователь полностью контролирует свой Vault через
@@ -18,14 +19,16 @@ on-chain хранилище на заданный срок. Цель — физ�
 
 ## 2. Целевой пользователь
 
-**Кто:** держатели ETH и популярных ERC-20 на Base, которые хотят навязать
-себе HODL-дисциплину.
+**Кто:** держатели ERC-20 на Base (токены экосистемы Base, мем-коины,
+токены инфраструктурных проектов — $VVV, $AVNT, $UP, $MORPHO, $ZORA
+и подобные), которые хотят навязать себе HODL-дисциплину.
 
 **Боль:**
 - Эмоциональные продажи на просадках.
 - Слабая воля при волатильности.
 - «Это последний раз» — и снова продал.
 - Хочется пройти цикл, но руки тянутся к Sell.
+- Спекулятивная позиция кричит «продай на +30%», хотя тезис был на 10x.
 
 **Два сегмента:**
 - **Soft mode (Penalty-lock).** Для тех, кому нужна страховка, а не тюрьма.
@@ -49,8 +52,12 @@ on-chain хранилище на заданный срок. Цель — физ�
 
 1. **Первый заход в Base App.** Пользователь открывает Diamond Hands через
    каталог Base App.
-2. **Выбор актива.** ETH или ERC-20 из его кошелька. Аппка показывает баланс.
-3. **Выбор параметров.** `amount` (≥ MIN_*_AMOUNT), `unlockTimestamp`
+2. **Выбор актива.** ERC-20 токен из кошелька (для ETH — заверни
+   в WETH, на Base это `0x4200000000000000000000000000000000000006`,
+   и используй WETH как актив). Аппка показывает баланс выбранного
+   токена. Перед созданием Vault аппка проверяет ERC-20 allowance
+   на Factory и при необходимости предлагает approve-транзакцию.
+3. **Выбор параметров.** `amount` (> 0), `unlockTimestamp`
    (в диапазоне MIN_LOCK_DURATION — MAX_LOCK_DURATION от now).
 4. **Выбор режима.** Radio: Soft (с штрафом) / Hard (без выхода).
    - Для **Soft**: дополнительный slider/radio «Жёсткость штрафа»
@@ -112,7 +119,7 @@ on-chain хранилище на заданный срок. Цель — физ�
 
 **Состояние каждого Vault clone:**
 - `owner` (address) — владелец позиции (тот, кто создал).
-- `asset` (address) — `address(0)` для ETH, иначе адрес ERC-20.
+- `asset` (address) — адрес ERC-20 токена. Не может быть `address(0)`.
 - `amount` (uint256) — ТЕКУЩАЯ суммарная сумма (с учётом всех topUp).
 - `createdAt` (uint256) — timestamp создания (метаинформация для UI).
 - `lockStartedAt` (uint256) — точка отсчёта текущей penalty-кривой.
@@ -143,12 +150,15 @@ on-chain хранилище на заданный срок. Цель — физ�
 **Константы Factory (Фаза 1):**
 - `MIN_LOCK_DURATION = 7 days` (604_800 секунд).
 - `MAX_LOCK_DURATION = 1825 days` (≈ 5 лет, 157_680_000 секунд).
-- `MIN_ETH_AMOUNT = 1e15 wei` (0.001 ETH).
 - `MIN_USER_PENALTY_BPS = 500` (5%). Нижняя граница `maxPenaltyBps`
   для soft-mode Vault'ов.
 - `ABS_MAX_PENALTY_BPS = 3000` (30%). Верхняя граница `maxPenaltyBps`.
   Защита от случайно-разрушительных значений.
 - `BPS_DENOMINATOR = 10000`.
+
+Минимума по amount нет (для ERC-20 без price-oracle нельзя задать
+осмысленный порог, MIN-проверка отдаётся UX-слою и/или whitelist'у
+в Фазе 2). На уровне контракта только `amount > 0`.
 
 Прежняя константа `MAX_PENALTY_BPS = 2000` (20%) убрана из контракта —
 теперь это значение фигурирует только как UI-default в аппке. На уровне
@@ -193,8 +203,8 @@ on-chain хранилище на заданный срок. Цель — физ�
 - `withdraw()` — после анлока, 100% от текущего `amount`.
 - `emergencyWithdraw()` — только если `allowEarlyExit == true` и
   `block.timestamp < unlockTimestamp`.
-- `topUp(uint256)` — добавить тот же актив. Для ETH — через `msg.value`,
-  для ERC-20 — через `safeTransferFrom`.
+- `topUp(uint256)` — добавить тот же ERC-20 актив через
+  `safeTransferFrom` (требуется allowance на Vault).
 - `extendLock(uint256)` — продлить срок (только в большую сторону).
 - `checkIn()` — no-op + event. Решение по open question 1: оставляем
   в V1 как WTU-friendly «штамп присутствия».
@@ -244,21 +254,23 @@ Factory owner'ом:
 
 ## 7. Денежный поток
 
+Все операции идут в ERC-20. Нативный токен сети (ETH) в контракте
+не используется — функции `createVault` и `topUp` не `payable`,
+любая попытка отправить нативный токен реверится автоматически
+на уровне Solidity.
+
 | Операция | Из | В | Где CEI критичен |
 |---|---|---|---|
-| `createVault` (ETH) | User | Vault clone (через Factory.forward) | Да: отправка ETH в новый адрес после деплоя клона. |
-| `createVault` (ERC-20) | User | Vault clone (через `safeTransferFrom`) | Да: внешний вызов токена. |
-| `withdraw` | Vault clone | owner | Да: отправка ETH или ERC-20. |
+| `createVault` | User | Vault clone (через `safeTransferFrom`) | Да: внешний вызов токена. |
+| `withdraw` | Vault clone | owner | Да: внешний `safeTransfer`. |
 | `emergencyWithdraw` | Vault clone | owner + feeReceiver | Да: два внешних вызова. Отправка на `feeReceiver` пропускается, если `penaltyAmt == 0`. |
-| `topUp` (ETH) | User | Vault clone (через `msg.value`) | Receive, не send. nonReentrant всё равно. |
-| `topUp` (ERC-20) | User | Vault clone (через `safeTransferFrom`) | Внешний токен-вызов, nonReentrant. |
+| `topUp` | User | Vault clone (через `safeTransferFrom`) | Внешний токен-вызов, nonReentrant. |
 | `extendLock` | — | — | Только state change. |
 | `checkIn` | — | — | Только event. |
 
-**Где есть отправка ETH (требует CEI):** `withdraw`, `emergencyWithdraw`,
-а также сам `createVault` на стороне Factory (forward msg.value в свежий клон).
-
-**Где есть отправка ERC-20 (требует CEI):** `withdraw`, `emergencyWithdraw`.
+**Где есть внешние вызовы ERC-20 (требует CEI):**
+- Приём: `Factory.createVault`, `Vault.topUp` (`safeTransferFrom`).
+- Отправка: `Vault.withdraw`, `Vault.emergencyWithdraw` (`safeTransfer`).
 
 **Reentrancy guard:**
 - `Vault.withdraw`, `Vault.emergencyWithdraw`, `Vault.topUp` — `nonReentrant` (обязательно).
@@ -277,12 +289,13 @@ Factory owner'ом:
 - `unlockTimestamp <= block.timestamp` → revert.
 - `unlockTimestamp - block.timestamp < MIN_LOCK_DURATION` (7 дней) → revert.
 - `unlockTimestamp - block.timestamp > MAX_LOCK_DURATION` (1825 дней) → revert.
-- ETH-режим (`asset == address(0)`): `msg.value != amount` → revert;
-  `amount < MIN_ETH_AMOUNT` (0.001 ETH) → revert.
-- ERC-20 режим: `msg.value != 0` → revert (защита от случайной отправки
-  ETH вместе с ERC-20).
-- `asset != address(0)` но по адресу нет кода → revert (предлагаю
-  проверять `asset.code.length > 0` для защиты от опечаток).
+- `asset == address(0)` → revert `InvalidAsset()`. Нативный токен сети
+  не поддерживается; для блокировки ETH пользователь оборачивает
+  его в WETH на фронте.
+- `asset` есть, но по адресу нет кода (`asset.code.length == 0`) →
+  revert (защита от опечаток / самоуничтоженных контрактов).
+- Попытка отправить нативный токен с createVault (любой `value > 0`) →
+  автоматический revert: функция non-payable.
 - **Параметр `maxPenaltyBps`:**
   - Soft-mode (`allowEarlyExit == true`):
     - `maxPenaltyBps < MIN_USER_PENALTY_BPS` (500) → revert.
@@ -340,8 +353,11 @@ Factory owner'ом:
   Factory делает clone + initialize атомарно в одной транзакции.
 
 **Reentrancy:**
-- ETH callback при отправке через `call{value:}` → защита: ReentrancyGuard
-  на withdraw/emergencyWithdraw/topUp + CEI порядок.
+- ERC-20 callback при `safeTransferFrom` / `safeTransfer` (злонамеренный
+  или баг-имеющий токен может попытаться войти в Vault или Factory
+  повторно) → защита: `ReentrancyGuard.nonReentrant` на
+  `Factory.createVault`, `Vault.withdraw`, `Vault.emergencyWithdraw`,
+  `Vault.topUp` + строгий CEI-порядок.
 
 **extendLock:**
 - `newUnlockTimestamp <= unlockTimestamp` → revert.
@@ -355,8 +371,10 @@ Factory owner'ом:
 
 **topUp:**
 - `addAmount == 0` → revert.
-- `topUp` с `msg.value != addAmount` для ETH-vault → revert.
-- `topUp` с `msg.value != 0` для ERC-20-vault → revert.
+- Попытка отправить нативный токен с topUp (любой `value > 0`) →
+  автоматический revert: функция non-payable.
+- Требуется ERC-20 allowance от пользователя на Vault. Без allowance
+  `safeTransferFrom` упадёт.
 - `topUp` после `unlockTimestamp` → revert.
   **Обоснование:** лок истёк, добавление средств в «разлоченный» Vault
   бессмысленно — это просто отложенный депозит без блокировки.
@@ -371,6 +389,14 @@ Factory owner'ом:
 
 ## 9. Что НЕ делаем в V1
 
+- **Нативный ETH как актив для лока.** Контракт работает только
+  с ERC-20. Для блокировки ETH пользователь оборачивает его в WETH
+  на фронте перед созданием Vault. Функции `createVault` и `topUp`
+  объявлены non-payable, любая попытка отправить нативный токен
+  реверится автоматически на уровне Solidity. Это сознательное
+  упрощение: уходит отдельная ветка для нулевого `asset` во всех
+  функциях, уходит низкоуровневая отправка нативного токена,
+  уходит обработка прикреплённого к транзакции значения.
 - Yield-стратегии (Aave / Morpho / Compound).
 - NFT-receipt позиции (transferable ERC-721).
 - Лидерборд / social proof.
@@ -420,6 +446,10 @@ Factory owner'ом:
   бэйджей за длительные серии (off-chain индексация event'а).
 - **Частичный withdraw / partial extend.**
 - **Social-проф** — Farcaster cast при создании и при успешном завершении.
+- **Нативная поддержка ETH без обёртки в WETH.** Возможна через
+  добавление обратно ветки `asset == address(0)` в `createVault` /
+  `topUp` / `withdraw` / `emergencyWithdraw`. Решение зависит от того,
+  насколько часто пользователи запрашивают эту фичу после релиза V1.
 
 ---
 
@@ -467,6 +497,7 @@ Factory owner'ом:
 | 11 | Интерфейс `IDiamondHandsVault` | **Вводим.** Используется для типобезопасного вызова `Factory → Vault.initialize`. |
 | 12 | Порядок `createVault`: `initialize` ДО/ПОСЛЕ перевода | **ПОСЛЕ.** Factory знает `actualAmount`, передаёт его в `initialize`. Корректно для fee-on-transfer. |
 | 13 | `MAX_PENALTY_BPS` | **Параметризован на уровне Vault**, выбирается пользователем в диапазоне `[500, 3000]` bps в soft mode; принудительно `0` в hard mode. Прежняя константа удалена из контракта, остаётся только UI-default. |
+| 14 | Поддержка нативного ETH | **УБРАНА из V1.** Контракт работает только с ERC-20. ETH блокируется через WETH (обёртка на фронте, на Base: `0x4200000000000000000000000000000000000006`). Кандидат на Фазу 2 при наличии пользовательского запроса. |
 
 Эти решения фиксируют публичный API контрактов и storage layout для
 Фазы 1.

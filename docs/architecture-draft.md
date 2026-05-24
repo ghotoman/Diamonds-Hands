@@ -85,20 +85,24 @@
 
 ### Поток создания одного Vault
 
-1. User → `Factory.createVault{value: ethAmount или 0}(asset, amount, unlockTs, allowEarlyExit, maxPenaltyBps)`.
-2. Factory проверяет параметры (MIN/MAX, mode, paused, msg.value,
-   диапазон `maxPenaltyBps` для выбранного mode). `nonReentrant`
-   modifier на этом этапе ставит guard.
-3. Factory → `Clones.clone(implementation)` → новый адрес `vault`.
-4. Factory → `vaultCount++`, `vaultsByOwner[user].push(vault)`.
-5. Factory переводит средства в `vault`:
-   - ETH: `vault.call{value: msg.value}("")`.
-   - ERC-20: измеряет `balanceBefore` на `vault`, делает
-     `safeTransferFrom(user → vault, amount)`, измеряет `balanceAfter`,
-     считает `actualAmount = balanceAfter − balanceBefore`.
-6. Factory → `IDiamondHandsVault(vault).initialize(user, asset, actualAmount, unlockTs, allowEarlyExit, currentFeeReceiver, maxPenaltyBps)`.
-7. Vault.initialize сохраняет state.
-8. Factory эмитит `VaultCreated(user, vault, asset, actualAmount, unlockTs, allowEarlyExit, currentFeeReceiver, maxPenaltyBps)`.
+1. User делает ERC-20 `approve(Factory, amount)` на токене `asset`
+   (отдельная транзакция или часть UX-цепочки).
+2. User → `Factory.createVault(asset, amount, unlockTs, allowEarlyExit, maxPenaltyBps)`.
+   Функция non-payable: попытка отправить нативный токен реверится.
+3. Factory проверяет параметры (MIN/MAX, mode, paused, диапазон
+   `maxPenaltyBps` для выбранного mode, `asset != address(0)`,
+   `asset.code.length > 0`). `nonReentrant` modifier на этом этапе
+   ставит guard.
+4. Factory → `Clones.clone(implementation)` → новый адрес `vault`.
+5. Factory → `vaultCount++`, `vaultsByOwner[user].push(vault)`.
+6. Factory переводит средства в `vault`:
+   - Измеряет `balanceBefore = IERC20(asset).balanceOf(vault)`.
+   - Делает `safeTransferFrom(user → vault, amount)`.
+   - Измеряет `balanceAfter`.
+   - Считает `actualAmount = balanceAfter − balanceBefore`.
+7. Factory → `IDiamondHandsVault(vault).initialize(user, asset, actualAmount, unlockTs, allowEarlyExit, currentFeeReceiver, maxPenaltyBps)`.
+8. Vault.initialize сохраняет state.
+9. Factory эмитит `VaultCreated(user, vault, asset, actualAmount, unlockTs, allowEarlyExit, currentFeeReceiver, maxPenaltyBps)`.
 
 ### Поток withdraw
 
@@ -126,10 +130,12 @@
 **Константы (immutable / constant в контракте):**
 - `MIN_LOCK_DURATION = 7 days`.
 - `MAX_LOCK_DURATION = 1825 days` (5 лет).
-- `MIN_ETH_AMOUNT = 1e15` (0.001 ETH).
 - `MIN_USER_PENALTY_BPS = 500` (5%).
 - `ABS_MAX_PENALTY_BPS = 3000` (30%).
 - `BPS_DENOMINATOR = 10000`.
+
+Минимума по `amount` нет: для ERC-20 без price-oracle нельзя задать
+осмысленный порог. На уровне контракта только `amount > 0`.
 
 ### `constructor(address _implementation, address _feeReceiver)`
 - **Visibility:** public (вызывается deployer'ом).
@@ -147,8 +153,9 @@
   - `FeeReceiverUpdated(address(0), _feeReceiver)`.
 - **Interactions:** нет.
 
-### `createVault(address asset, uint256 amount, uint256 unlockTimestamp, bool allowEarlyExit, uint16 maxPenaltyBps) external payable returns (address vault)`
-- **Visibility:** external payable.
+### `createVault(address asset, uint256 amount, uint256 unlockTimestamp, bool allowEarlyExit, uint16 maxPenaltyBps) external returns (address vault)`
+- **Visibility:** external. **NON-payable** — попытка отправить
+  нативный токен сети реверится автоматически на уровне Solidity.
 - **Modifiers:** `whenNotPaused`, **`nonReentrant`** (обязательно — см. защиту 7).
 - **Кто может вызвать:** anyone.
 - **Checks (в порядке CEI):**
@@ -156,12 +163,10 @@
   2. `amount > 0`.
   3. `unlockTimestamp >= block.timestamp + MIN_LOCK_DURATION`.
   4. `unlockTimestamp <= block.timestamp + MAX_LOCK_DURATION`.
-  5. Если `asset == address(0)` (ETH-режим):
-     - `msg.value == amount`.
-     - `amount >= MIN_ETH_AMOUNT` (0.001 ETH).
-  6. Если `asset != address(0)` (ERC-20 режим):
-     - `msg.value == 0`.
-     - `asset.code.length > 0`.
+  5. `asset != address(0)` → иначе revert `InvalidAsset()`
+     (нативный токен не поддерживается — для ETH использовать WETH).
+  6. `asset.code.length > 0` (защита от опечаток / самоуничтоженных
+     контрактов).
   7. **Валидация `maxPenaltyBps`:**
      - Если `allowEarlyExit == true` (soft mode):
        - `maxPenaltyBps >= MIN_USER_PENALTY_BPS` (500).
@@ -175,24 +180,22 @@
   3. `vaultsByOwner[msg.sender].push(vault)` (решение open question 2:
      mapping в Factory).
 - **Interactions:**
-  1. **ERC-20 ветка:**
-     - `balanceBefore = IERC20(asset).balanceOf(vault)`.
-     - `IERC20(asset).safeTransferFrom(msg.sender, vault, amount)`.
-     - `balanceAfter = IERC20(asset).balanceOf(vault)`.
-     - `actualAmount = balanceAfter − balanceBefore`.
-     - require `actualAmount > 0`.
-  2. **ETH ветка:**
-     - `(bool ok,) = vault.call{value: msg.value}("")`; require ok.
-     - `actualAmount = msg.value`.
-  3. `IDiamondHandsVault(vault).initialize(msg.sender, asset, actualAmount, unlockTimestamp, allowEarlyExit, feeReceiver, maxPenaltyBps)`.
+  1. `balanceBefore = IERC20(asset).balanceOf(vault)`.
+  2. `IERC20(asset).safeTransferFrom(msg.sender, vault, amount)`
+     (требует, чтобы пользователь предварительно сделал `approve`
+     на адрес Factory).
+  3. `balanceAfter = IERC20(asset).balanceOf(vault)`.
+  4. `actualAmount = balanceAfter − balanceBefore`.
+  5. require `actualAmount > 0`.
+  6. `IDiamondHandsVault(vault).initialize(msg.sender, asset, actualAmount, unlockTimestamp, allowEarlyExit, feeReceiver, maxPenaltyBps)`.
 - **Events:**
   - `VaultCreated(msg.sender, vault, asset, actualAmount, unlockTimestamp, allowEarlyExit, feeReceiver, maxPenaltyBps)` — 8 полей.
-- **External interactions с untrusted кодом:** да (ERC-20 transferFrom).
-  Поэтому Effects (clone + counter + mapping) идут ДО transferFrom. После
-  transferFrom вызывается initialize — это вызов нашего же клон-кода, не
-  untrusted, но всё равно строго после Effects на Factory. `nonReentrant`
-  закрывает целый класс атак через злонамеренный/баг-токен, делающий
-  reentry в createVault.
+- **External interactions с untrusted кодом:** да (ERC-20 `transferFrom`).
+  Поэтому Effects (clone + counter + mapping) идут ДО `transferFrom`.
+  После `transferFrom` вызывается `initialize` — это вызов нашего же
+  клон-кода, не untrusted, но всё равно строго после Effects на Factory.
+  `nonReentrant` закрывает целый класс атак через злонамеренный
+  или баг-имеющий токен, делающий reentry в `createVault`.
 
 ### `setImplementation(address newImpl) external onlyOwner`
 - **Visibility:** external.
@@ -261,10 +264,12 @@ delegatecall. Различие только в том, что в implementation
   с чужими параметрами.
 - **Checks:**
   1. `_owner != address(0)`.
-  2. `_amount > 0`.
-  3. `_unlockTimestamp > block.timestamp`.
-  4. `_feeReceiver != address(0)`.
-  5. Страховка совместимости `_allowEarlyExit` и `_maxPenaltyBps`:
+  2. `_asset != address(0)` (двойная страховка: Factory уже проверил;
+     Vault фиксирует инвариант «актив всегда ERC-20»).
+  3. `_amount > 0`.
+  4. `_unlockTimestamp > block.timestamp`.
+  5. `_feeReceiver != address(0)`.
+  6. Страховка совместимости `_allowEarlyExit` и `_maxPenaltyBps`:
      - Если `_allowEarlyExit == false` → require `_maxPenaltyBps == 0`.
      - Если `_allowEarlyExit == true` → require `_maxPenaltyBps != 0`
        (Factory уже проверил полный диапазон; Vault проверяет инвариант
@@ -296,8 +301,7 @@ delegatecall. Различие только в том, что в implementation
   2. `uint256 payout = amount`.
   3. `amount = 0`.
 - **Interactions:**
-  - ETH: `(bool ok,) = owner.call{value: payout}("")`; require ok.
-  - ERC-20: `IERC20(asset).safeTransfer(owner, payout)`.
+  - `IERC20(asset).safeTransfer(owner, payout)`.
 - **Events:** `Withdrawn(owner, payout)`.
 
 ### `emergencyWithdraw() external nonReentrant`
@@ -316,12 +320,8 @@ delegatecall. Различие только в том, что в implementation
   3. `withdrawn = true`.
   4. `amount = 0`.
 - **Interactions:**
-  - ETH:
-    - `(bool ok1,) = owner.call{value: payout}("")`; require ok1.
-    - `if (penaltyAmt > 0)` then `(bool ok2,) = feeReceiver.call{value: penaltyAmt}("")`; require ok2.
-  - ERC-20:
-    - `IERC20(asset).safeTransfer(owner, payout)`.
-    - `if (penaltyAmt > 0)` then `IERC20(asset).safeTransfer(feeReceiver, penaltyAmt)`.
+  - `IERC20(asset).safeTransfer(owner, payout)` (всегда).
+  - `if (penaltyAmt > 0)` then `IERC20(asset).safeTransfer(feeReceiver, penaltyAmt)`.
   - **Защита transfer 0:** некоторые ERC-20 реверят на `transfer(_, 0)`,
     также по принципу безопасности избегаем лишнего внешнего вызова
     при нулевом значении. Когда `penaltyAmt == 0` (например, в последние
@@ -331,8 +331,9 @@ delegatecall. Различие только в том, что в implementation
     штраф = 0.
 - **Events:** `EmergencyWithdrawn(owner, payout, penaltyAmt)`.
 
-### `topUp(uint256 addAmount) external payable nonReentrant`
-- **Visibility:** external payable.
+### `topUp(uint256 addAmount) external nonReentrant`
+- **Visibility:** external. **NON-payable** — попытка отправить
+  нативный токен реверится автоматически.
 - **Modifiers:** `nonReentrant`.
 - **Кто может вызвать:** vaultOwner.
 - **Checks:**
@@ -340,22 +341,21 @@ delegatecall. Различие только в том, что в implementation
   2. `!withdrawn`.
   3. `block.timestamp < unlockTimestamp`.
   4. `addAmount > 0`.
-  5. Если `asset == address(0)` (ETH): `msg.value == addAmount`.
-  6. Если `asset != address(0)` (ERC-20): `msg.value == 0`.
-- **Effects + Interactions (особый порядок для ERC-20):**
-  - **ETH:** `amount += msg.value` (ETH уже пришёл с транзакцией, нет
-    внешнего вызова, который мог бы изменить delta).
-  - **ERC-20:**
-    1. `balanceBefore = IERC20(asset).balanceOf(address(this))`.
-    2. `IERC20(asset).safeTransferFrom(msg.sender, address(this), addAmount)`.
-    3. `balanceAfter = IERC20(asset).balanceOf(address(this))`.
-    4. `delta = balanceAfter − balanceBefore`.
-    5. require `delta > 0`.
-    6. `amount += delta`.
+- **Effects + Interactions (Interactions частично перед Effects, см. ниже):**
+  1. `balanceBefore = IERC20(asset).balanceOf(address(this))`.
+  2. `IERC20(asset).safeTransferFrom(msg.sender, address(this), addAmount)`
+     (требует, чтобы пользователь предварительно сделал `approve`
+     на адрес этого Vault).
+  3. `balanceAfter = IERC20(asset).balanceOf(address(this))`.
+  4. `delta = balanceAfter − balanceBefore`.
+  5. require `delta > 0`.
+  6. `amount += delta`.
   - Здесь Interactions частично идут перед Effects (мы должны узнать
     фактически полученное), но это безопасно благодаря `nonReentrant`:
     повторный вход с любой функции Vault невозможен.
-- **Events:** `ToppedUp(owner, deltaOrMsgValue, amount)`.
+- **Events:** `ToppedUp(owner, delta, amount)` — `delta` это actual
+  received после `balanceOf`-измерения (для fee-on-transfer токенов
+  будет меньше, чем заявленный `addAmount`).
 
 ### `extendLock(uint256 newUnlockTimestamp) external`
 - **Visibility:** external.
@@ -423,23 +423,32 @@ delegatecall. Различие только в том, что в implementation
     потому что Factory делает `Clones.clone` и `initialize` атомарно
     в одной транзакции. Между ними никто не успеет встрять.
 
-### 2. Различие ETH-режима и ERC-20-режима
+### 2. ERC-20 режим (единственный)
 
-- `asset == address(0)` → ETH-режим:
-  - `createVault`: `msg.value == amount`.
-  - `topUp`: `msg.value == addAmount`.
-  - `withdraw` / `emergencyWithdraw`: отправка через `call{value: ...}("")`.
-  - SafeERC20 НЕ используется.
-- `asset != address(0)` → ERC-20-режим:
-  - `createVault`: `msg.value == 0`, `safeTransferFrom`.
-  - `topUp`: `msg.value == 0`, `safeTransferFrom`.
-  - `withdraw` / `emergencyWithdraw`: `safeTransfer`.
-  - `call{value: ...}` НЕ используется.
-- В обоих режимах `amount > 0`.
+Контракт поддерживает только ERC-20 активы. Параметр `asset`
+в `createVault` обязан быть ненулевым адресом, по которому существует
+контракт (`code.length > 0`). Адрес `address(0)` явно реверится
+с custom error `InvalidAsset()`.
+
+- `createVault`: функция **non-payable**. `safeTransferFrom(msg.sender, vault, amount)`.
+- `topUp`: функция **non-payable**. `safeTransferFrom(msg.sender, address(this), addAmount)`.
+- `withdraw`: `safeTransfer(owner, payout)`.
+- `emergencyWithdraw`: `safeTransfer(owner, payout)`, и
+  `if (penaltyAmt > 0)` то `safeTransfer(feeReceiver, penaltyAmt)`.
+- В контракте `amount > 0` всегда.
+
+Нативный токен сети (ETH) в контракте не используется. Если пользователь
+хочет залочить ETH — он оборачивает в WETH вне контракта (UI задача
+Фазы 3) и передаёт адрес WETH (на Base:
+`0x4200000000000000000000000000000000000006`).
+
+Все функции с переводами объявлены non-payable: любая попытка
+отправить нативный токен реверится автоматически на уровне Solidity
+без необходимости явных проверок.
 
 ### 3. Защита от fee-on-transfer токенов
 
-- На стороне Factory.createVault (ERC-20 ветка):
+- На стороне `Factory.createVault`:
   1. `balanceBefore = IERC20(asset).balanceOf(vault)`.
   2. `IERC20(asset).safeTransferFrom(msg.sender, vault, amount)`.
   3. `balanceAfter = IERC20(asset).balanceOf(vault)`.
@@ -447,7 +456,7 @@ delegatecall. Различие только в том, что в implementation
   5. require `actualAmount > 0`.
   6. Передаём `actualAmount`, а НЕ заявленный `amount`, в
      `Vault.initialize`.
-- На стороне Vault.topUp (ERC-20 ветка) — то же самое, но `balanceOf`
+- На стороне `Vault.topUp` — то же самое, но `balanceOf`
   меряется на `address(this)`:
   1. `balanceBefore = IERC20(asset).balanceOf(address(this))`.
   2. `safeTransferFrom(msg.sender, address(this), addAmount)`.
@@ -458,10 +467,10 @@ delegatecall. Различие только в том, что в implementation
 
 **Архитектурное замечание.** Есть два возможных потока ERC-20 при
 createVault:
-- **Вариант А (выбран).** Factory.safeTransferFrom(user → vault).
+- **Вариант А (выбран).** `Factory.safeTransferFrom(user → vault)`.
   Factory меряет balance на vault до/после. Передаёт `actualAmount`
   в `initialize`.
-- **Вариант Б (отвергнут).** Vault.initialize сам вызывает
+- **Вариант Б (отвергнут).** `Vault.initialize` сам вызывает
   `safeTransferFrom(user → this)`. **Не работает:** пользователь
   сделал approve на адрес Factory, а адрес нового Vault он не знает
   заранее, и approve'а на Vault у него нет.
@@ -472,12 +481,10 @@ createVault:
 
 | Функция | Checks | Effects | Interactions |
 |---|---|---|---|
-| `Factory.createVault` (ETH) | params + msg.value | clone + counters | send ETH → vault, initialize |
-| `Factory.createVault` (ERC-20) | params + msg.value==0 | clone + counters | safeTransferFrom user → vault, initialize |
-| `Vault.withdraw` | owner, time, !withdrawn | `withdrawn=true`, `amount=0` | send to owner |
-| `Vault.emergencyWithdraw` | owner, allowEarlyExit, !withdrawn, до анлока | penalty calc, `withdrawn=true`, `amount=0` | send to owner, send to feeReceiver **только если penaltyAmt > 0** |
-| `Vault.topUp` (ETH) | owner, !withdrawn, до анлока, msg.value==addAmount | `amount += msg.value` | — (ETH уже пришло) |
-| `Vault.topUp` (ERC-20) | owner, !withdrawn, до анлока, msg.value==0 | (после Interactions) `amount += delta` | safeTransferFrom + balanceOf delta |
+| `Factory.createVault` | params, `asset != 0`, диапазоны | clone + counters | safeTransferFrom user → vault + balanceOf delta, initialize |
+| `Vault.withdraw` | owner, time, !withdrawn | `withdrawn=true`, `amount=0` | safeTransfer to owner |
+| `Vault.emergencyWithdraw` | owner, allowEarlyExit, !withdrawn, до анлока | penalty calc, `withdrawn=true`, `amount=0` | safeTransfer to owner, safeTransfer to feeReceiver **только если penaltyAmt > 0** |
+| `Vault.topUp` | owner, !withdrawn, до анлока, addAmount>0 | (после Interactions) `amount += delta` | safeTransferFrom + balanceOf delta |
 | `Vault.extendLock` | owner, !withdrawn, до анлока, newTs > oldTs, лимит | `unlockTimestamp`, `lockStartedAt` | — |
 | `Vault.checkIn` | owner, !withdrawn | — | — |
 
@@ -549,8 +556,7 @@ function renounceOwnership() public override {
   `emergencyWithdraw`.
 - **Решение:** в `emergencyWithdraw` обёрнуть отправку penalty
   в `if (penaltyAmt > 0)`. При нулевом штрафе пользователь получает
-  100% от `amount`, отправка на `feeReceiver` пропускается (и для ETH,
-  и для ERC-20 для единообразия).
+  100% от `amount`, отправка на `feeReceiver` пропускается.
 - Это согласуется с инвариантом penalty-кривой: на момент
   `unlockTimestamp` штраф = 0, и пользователь и так получил бы 100%
   через обычный `withdraw`. `emergencyWithdraw` с `penaltyAmt == 0`
@@ -599,10 +605,10 @@ function currentPenaltyAmount() returns uint256:
 
 **Сценарий.** Lock 100 дней, прошло 99. timeLeft=1, totalDuration=100,
 `currentPenaltyBps` = 2000 × 1 / 100 = 20 (= 0.2%). Пользователь делает
-`topUp +10 ETH`. Теперь `amount = старая + 10`. Если он сразу же
-вызовет `emergencyWithdraw`, штраф будет 0.2% от ВСЕЙ суммы, включая
-только что добавленные 10 ETH. То есть свежий депозит залочен с
-почти нулевым штрафом.
+`topUp +10` единиц токена. Теперь `amount = старая + 10`. Если он сразу
+же вызовет `emergencyWithdraw`, штраф будет 0.2% от ВСЕЙ суммы, включая
+только что добавленные 10 единиц. То есть свежий депозит залочен
+с почти нулевым штрафом.
 
 **Это эксплойт?** Технически нет — пользователь не выкачивает протокол,
 он лишь «недоплачивает» штраф на свежие средства. Это потеря revenue,
@@ -752,7 +758,7 @@ Vault создан впервые» и не меняется никогда. `cu
       Сохраняем заявленный `amount`. Не корректно для
       fee-on-transfer токенов.
     - ПОСЛЕ: Factory знает `actualAmount`, передаёт в `initialize`.
-      Корректно для fee-on-transfer. Унифицирует ETH и ERC-20 потоки.
+      Корректно для fee-on-transfer.
     - **Моё предложение: ПОСЛЕ.** Это согласуется с защитой 3.
 
 ---
@@ -765,7 +771,7 @@ Vault создан впервые» и не меняется никогда. `cu
 | 2 | Индексация Vault'ов | **Mapping `vaultsByOwner` в Factory.** | `vaultsByOwner` mapping и `getVaultsByOwner` view — обязательны. |
 | 3 | Penalty при `topUp` | **Игнорируем edge case** (вариант A). | Простая формула на основе `amount` и `lockStartedAt`, без массива депозитов. |
 | 4 | Penalty при `extendLock` | **`lockStartedAt = block.timestamp`** при extend (вариант B). | В storage Vault'а есть поле `lockStartedAt`, обновляется в `extendLock`. |
-| 5 | Fee-on-transfer | **Поддерживаем через `balanceOf` delta.** | `balanceOf` до/после в `Factory.createVault` (ERC-20 ветка) и `Vault.topUp` (ERC-20 ветка). |
+| 5 | Fee-on-transfer | **Поддерживаем через `balanceOf` delta.** | `balanceOf` до/после в `Factory.createVault` и `Vault.topUp`. |
 | 6 | Rebasing-токены | **Документируем риск,** не блокируем технически. | Без изменений в контрактах. Whitelist — Фаза 2. |
 | 7 | Transfer Vault ownership | **НЕТ в V1.** | На Vault нет `transferOwnership`. `owner` зафиксирован в `initialize`. |
 | 8 | `emergencyWithdraw` после `unlockTimestamp` | **Revert `UseWithdrawInstead()`.** | Дополнительный check в `emergencyWithdraw`. |
@@ -774,6 +780,7 @@ Vault создан впервые» и не меняется никогда. `cu
 | 11 | Интерфейс `IDiamondHandsVault` | **Ввести.** | Отдельный interface-файл, Factory вызывает Vault через него. |
 | 12 | Порядок `createVault`: initialize ДО/ПОСЛЕ | **ПОСЛЕ перевода.** | Factory сначала переводит средства, потом вызывает `initialize(..., actualAmount, ...)`. |
 | 13 | `MAX_PENALTY_BPS` | **Параметризован на уровне Vault**, выбирается пользователем в диапазоне `[500, 3000]` bps в soft mode; принудительно `0` в hard mode. Прежняя константа удалена из контракта. | В storage Vault'а есть поле `uint16 maxPenaltyBps`. `Factory.createVault` и `Vault.initialize` получают параметр `maxPenaltyBps`. `currentPenaltyBps` использует поле, а не константу. Event `VaultCreated` включает `maxPenaltyBps`. В Factory добавлены константы `MIN_USER_PENALTY_BPS=500` и `ABS_MAX_PENALTY_BPS=3000`. |
+| 14 | Поддержка нативного ETH | **УБРАНА из V1.** Контракт работает только с ERC-20. ETH блокируется через WETH (обёртка на фронте, на Base: `0x4200000000000000000000000000000000000006`). Кандидат на Фазу 2 при наличии пользовательского запроса. | `createVault` и `topUp` non-payable. Убрана отдельная ветка для нулевого `asset` во всех функциях. Убрана минимальная-сумма-в-нативном-токене (бывшая константа Factory). В `Factory.createVault` явный revert `InvalidAsset()` при `asset == address(0)`. Низкоуровневая отправка нативного токена больше не нужна. |
 
 Эти решения фиксируют публичный API контрактов и storage layout для
 Фазы 1. Можно переходить к написанию Solidity.
