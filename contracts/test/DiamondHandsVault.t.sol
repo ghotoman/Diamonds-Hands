@@ -29,20 +29,9 @@ contract DiamondHandsVaultTest is Test {
 
     // Re-declare events to use with vm.expectEmit
     event Withdrawn(address indexed owner, uint256 amount);
-    event EmergencyWithdrawn(
-        address indexed owner,
-        uint256 amountToOwner,
-        uint256 penaltyAmount
-    );
-    event ToppedUp(
-        address indexed owner,
-        uint256 addedAmount,
-        uint256 newTotalAmount
-    );
-    event LockExtended(
-        uint256 oldUnlockTimestamp,
-        uint256 newUnlockTimestamp
-    );
+    event EmergencyWithdrawn(address indexed owner, uint256 amountToOwner, uint256 penaltyAmount);
+    event ToppedUp(address indexed owner, uint256 addedAmount, uint256 newTotalAmount);
+    event LockExtended(uint256 oldUnlockTimestamp, uint256 newUnlockTimestamp);
     event CheckedIn(address indexed owner, uint256 timestamp);
 
     function setUp() public {
@@ -66,58 +55,31 @@ contract DiamondHandsVaultTest is Test {
     //                            HELPERS
     // -----------------------------------------------------------------
 
-    function _createSoftVault(
-        uint256 amount,
-        uint256 lockSeconds,
-        uint16 bps
-    ) internal returns (DiamondHandsVault) {
+    function _createSoftVault(uint256 amount, uint256 lockSeconds, uint16 bps) internal returns (DiamondHandsVault) {
         vm.prank(ALICE);
-        address v = factory.createVault(
-            address(token),
-            amount,
-            block.timestamp + lockSeconds,
-            true,
-            bps
-        );
+        address v = factory.createVault(address(token), amount, block.timestamp + lockSeconds, true, bps);
         // ALICE pre-approves vault for topUp scenarios
         vm.prank(ALICE);
         token.approve(v, type(uint256).max);
         return DiamondHandsVault(v);
     }
 
-    function _createHardVault(uint256 amount, uint256 lockSeconds)
-        internal
-        returns (DiamondHandsVault)
-    {
+    function _createHardVault(uint256 amount, uint256 lockSeconds) internal returns (DiamondHandsVault) {
         vm.prank(ALICE);
-        address v = factory.createVault(
-            address(token),
-            amount,
-            block.timestamp + lockSeconds,
-            false,
-            0
-        );
+        address v = factory.createVault(address(token), amount, block.timestamp + lockSeconds, false, 0);
         vm.prank(ALICE);
         token.approve(v, type(uint256).max);
         return DiamondHandsVault(v);
     }
 
-    function _createSoftVaultWithToken(
-        address tokenAddr,
-        uint256 amount,
-        uint256 lockSeconds,
-        uint16 bps
-    ) internal returns (DiamondHandsVault) {
+    function _createSoftVaultWithToken(address tokenAddr, uint256 amount, uint256 lockSeconds, uint16 bps)
+        internal
+        returns (DiamondHandsVault)
+    {
         vm.prank(ALICE);
         MockERC20(tokenAddr).approve(address(factory), type(uint256).max);
         vm.prank(ALICE);
-        address v = factory.createVault(
-            tokenAddr,
-            amount,
-            block.timestamp + lockSeconds,
-            true,
-            bps
-        );
+        address v = factory.createVault(tokenAddr, amount, block.timestamp + lockSeconds, true, bps);
         vm.prank(ALICE);
         MockERC20(tokenAddr).approve(v, type(uint256).max);
         return DiamondHandsVault(v);
@@ -131,23 +93,11 @@ contract DiamondHandsVaultTest is Test {
         // Cannot initialize the implementation directly — initializers
         // are disabled in the constructor of the impl.
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        impl.initialize(
-            ALICE,
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            FEE_RECEIVER,
-            2000
-        );
+        impl.initialize(ALICE, address(token), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, FEE_RECEIVER, 2000);
     }
 
     function test_Initialize_OnClone_Works() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         assertEq(v.owner(), ALICE);
         assertEq(v.asset(), address(token));
         assertEq(v.amount(), DEFAULT_AMOUNT);
@@ -161,36 +111,16 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_Initialize_RevertsOnSecondCall() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        v.initialize(
-            ALICE,
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            FEE_RECEIVER,
-            2000
-        );
+        v.initialize(ALICE, address(token), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, FEE_RECEIVER, 2000);
     }
 
     function test_Initialize_DirectOnImplementation_Reverts() public {
         // same as _DisablesInitializers but using explicit assertion of
         // the design intent
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        impl.initialize(
-            ALICE,
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            FEE_RECEIVER,
-            2000
-        );
+        impl.initialize(ALICE, address(token), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, FEE_RECEIVER, 2000);
     }
 
     function test_Initialize_RevertsOnZeroOwner() public {
@@ -198,13 +128,7 @@ contract DiamondHandsVaultTest is Test {
         DiamondHandsVault clone = DiamondHandsVault(cloneAddr);
         vm.expectRevert(Errors.ZeroAddress.selector);
         clone.initialize(
-            address(0),
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            FEE_RECEIVER,
-            2000
+            address(0), address(token), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, FEE_RECEIVER, 2000
         );
     }
 
@@ -212,30 +136,14 @@ contract DiamondHandsVaultTest is Test {
         address cloneAddr = Clones.clone(address(impl));
         DiamondHandsVault clone = DiamondHandsVault(cloneAddr);
         vm.expectRevert(Errors.InvalidAsset.selector);
-        clone.initialize(
-            ALICE,
-            address(0),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            FEE_RECEIVER,
-            2000
-        );
+        clone.initialize(ALICE, address(0), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, FEE_RECEIVER, 2000);
     }
 
     function test_Initialize_RevertsOnZeroAmount() public {
         address cloneAddr = Clones.clone(address(impl));
         DiamondHandsVault clone = DiamondHandsVault(cloneAddr);
         vm.expectRevert(Errors.AmountZero.selector);
-        clone.initialize(
-            ALICE,
-            address(token),
-            0,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            FEE_RECEIVER,
-            2000
-        );
+        clone.initialize(ALICE, address(token), 0, block.timestamp + DEFAULT_LOCK, true, FEE_RECEIVER, 2000);
     }
 
     function test_Initialize_RevertsOnPastUnlock() public {
@@ -257,15 +165,7 @@ contract DiamondHandsVaultTest is Test {
         address cloneAddr = Clones.clone(address(impl));
         DiamondHandsVault clone = DiamondHandsVault(cloneAddr);
         vm.expectRevert(Errors.ZeroAddress.selector);
-        clone.initialize(
-            ALICE,
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            address(0),
-            2000
-        );
+        clone.initialize(ALICE, address(token), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, address(0), 2000);
     }
 
     function test_Initialize_RevertsOnSoftWithZeroPenalty() public {
@@ -313,11 +213,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_Withdraw_TransfersFullAmount() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + DEFAULT_LOCK);
         assertEq(token.balanceOf(address(v)), DEFAULT_AMOUNT);
         vm.prank(ALICE);
@@ -379,12 +275,7 @@ contract DiamondHandsVaultTest is Test {
         MockFeeOnTransferERC20 fot = new MockFeeOnTransferERC20(500); // 5%
         fot.mint(ALICE, INITIAL_BALANCE);
 
-        DiamondHandsVault v = _createSoftVaultWithToken(
-            address(fot),
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVaultWithToken(address(fot), DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         // initial deposit: 5% fee taken → vault получил 95
         uint256 expectedDeposit = (DEFAULT_AMOUNT * 9500) / 10000;
         assertEq(v.amount(), expectedDeposit);
@@ -410,11 +301,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_EmergencyWithdraw_AfterUnlock_Reverts() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + DEFAULT_LOCK);
         vm.expectRevert(Errors.UseWithdrawInstead.selector);
         vm.prank(ALICE);
@@ -422,11 +309,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_EmergencyWithdraw_BeforeUnlock_HappyPath() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         // move to midpoint
         vm.warp(block.timestamp + DEFAULT_LOCK / 2);
         uint256 expectedPenalty = (DEFAULT_AMOUNT * 1000) / 10000; // 10%
@@ -445,21 +328,13 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_EmergencyWithdraw_PenaltyAtMax_AtLockStart() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            3000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 3000);
         // immediately after creation: penalty == maxPenaltyBps
         assertEq(v.currentPenaltyBps(), 3000);
     }
 
     function test_EmergencyWithdraw_PenaltyAtZero_NearUnlock() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         // 1 second before unlock; penaltyBps ~ 2000 * 1 / lockSeconds ≈ 0
         vm.warp(block.timestamp + DEFAULT_LOCK - 1);
         // 2000 * 1 / (30 days) = 2000 / 2592000 < 1 → integer div = 0
@@ -467,11 +342,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_EmergencyWithdraw_PenaltyLinearlyDecreases() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         // at t = 0: 2000
         assertEq(v.currentPenaltyBps(), 2000);
         // at t = lock/4: 1500
@@ -517,22 +388,14 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_EmergencyWithdraw_RevertsIfNotOwner() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.expectRevert(Errors.NotOwner.selector);
         vm.prank(BOB);
         v.emergencyWithdraw();
     }
 
     function test_EmergencyWithdraw_RevertsIfAlreadyWithdrawn() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + 1 days);
         vm.prank(ALICE);
         v.emergencyWithdraw();
@@ -542,11 +405,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_EmergencyWithdraw_EmitsEvent() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + DEFAULT_LOCK / 2);
         uint256 expectedPenalty = (DEFAULT_AMOUNT * 1000) / 10000;
         uint256 expectedPayout = DEFAULT_AMOUNT - expectedPenalty;
@@ -561,11 +420,7 @@ contract DiamondHandsVaultTest is Test {
     // =================================================================
 
     function test_TopUp_HappyPath_IncreasesAmount() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         uint256 addAmount = 50 ether;
         vm.prank(ALICE);
         v.topUp(addAmount);
@@ -573,11 +428,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_TopUp_RevertsIfNotOwner() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.prank(BOB);
         token.approve(address(v), type(uint256).max);
         vm.expectRevert(Errors.NotOwner.selector);
@@ -586,11 +437,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_TopUp_RevertsAfterUnlock() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + DEFAULT_LOCK);
         vm.expectRevert(Errors.TopUpAfterUnlock.selector);
         vm.prank(ALICE);
@@ -610,11 +457,7 @@ contract DiamondHandsVaultTest is Test {
         // ожидаемо упадёт на проверке времени, не withdrawn флага.
         // Поэтому тест переделаем: проверяем, что после withdrawn
         // нельзя топ-апить ДО unlock — через soft+emergency.
-        DiamondHandsVault v2 = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v2 = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + 1 days);
         vm.prank(ALICE);
         v2.emergencyWithdraw();
@@ -624,11 +467,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_TopUp_RevertsOnZero() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.expectRevert(Errors.AmountZero.selector);
         vm.prank(ALICE);
         v.topUp(0);
@@ -638,12 +477,7 @@ contract DiamondHandsVaultTest is Test {
         MockFeeOnTransferERC20 fot = new MockFeeOnTransferERC20(500); // 5%
         fot.mint(ALICE, INITIAL_BALANCE);
 
-        DiamondHandsVault v = _createSoftVaultWithToken(
-            address(fot),
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVaultWithToken(address(fot), DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         uint256 amountBefore = v.amount();
         uint256 addAmount = 100 ether;
         uint256 expectedDelta = (addAmount * 9500) / 10000;
@@ -657,12 +491,7 @@ contract DiamondHandsVaultTest is Test {
         MockFeeOnTransferERC20 fot = new MockFeeOnTransferERC20(0); // no fee
         fot.mint(ALICE, INITIAL_BALANCE);
 
-        DiamondHandsVault v = _createSoftVaultWithToken(
-            address(fot),
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVaultWithToken(address(fot), DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         // включаем 100% fee → delta = 0
         fot.setFeeBps(10000);
         vm.expectRevert(Errors.TransferReceivedZero.selector);
@@ -671,11 +500,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_TopUp_EmitsEvent() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         uint256 addAmount = 50 ether;
         vm.expectEmit(true, false, false, true, address(v));
         emit ToppedUp(ALICE, addAmount, DEFAULT_AMOUNT + addAmount);
@@ -688,11 +513,7 @@ contract DiamondHandsVaultTest is Test {
     // =================================================================
 
     function test_ExtendLock_HappyPath() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         uint256 oldUnlock = v.unlockTimestamp();
         uint256 newUnlock = oldUnlock + 30 days;
         vm.prank(ALICE);
@@ -701,11 +522,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_ExtendLock_UpdatesLockStartedAt() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + 10 days);
         uint256 oldStart = v.lockStartedAt();
         vm.prank(ALICE);
@@ -715,11 +532,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_ExtendLock_PenaltyCurveResetsToMax() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         // half-way through original lock: penaltyBps == 1000
         vm.warp(block.timestamp + DEFAULT_LOCK / 2);
         assertEq(v.currentPenaltyBps(), 1000);
@@ -731,22 +544,14 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_ExtendLock_RevertsIfNotOwner() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.expectRevert(Errors.NotOwner.selector);
         vm.prank(BOB);
         v.extendLock(block.timestamp + 60 days);
     }
 
     function test_ExtendLock_RevertsAfterUnlock() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + DEFAULT_LOCK);
         vm.expectRevert(Errors.ExtendAfterUnlock.selector);
         vm.prank(ALICE);
@@ -754,11 +559,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_ExtendLock_RevertsIfNewTsNotIncreased() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         uint256 unlock = v.unlockTimestamp(); // compute outside prank
         vm.expectRevert(Errors.ExtendMustIncrease.selector);
         vm.prank(ALICE);
@@ -766,11 +567,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_ExtendLock_RevertsAfterWithdrawn() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + 1 days);
         vm.prank(ALICE);
         v.emergencyWithdraw();
@@ -780,11 +577,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_ExtendLock_RevertsOnTooFarFuture() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         uint256 tooFar = block.timestamp + 1825 days + 1;
         vm.expectRevert(); // UnlockTooFar with payload
         vm.prank(ALICE);
@@ -792,11 +585,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_ExtendLock_EmitsEvent() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         uint256 oldUnlock = v.unlockTimestamp();
         uint256 newUnlock = oldUnlock + 30 days;
         vm.expectEmit(false, false, false, true, address(v));
@@ -810,11 +599,7 @@ contract DiamondHandsVaultTest is Test {
     // =================================================================
 
     function test_CheckIn_HappyPath_EmitsEvent() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.expectEmit(true, false, false, true, address(v));
         emit CheckedIn(ALICE, block.timestamp);
         vm.prank(ALICE);
@@ -822,22 +607,14 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_CheckIn_RevertsIfNotOwner() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.expectRevert(Errors.NotOwner.selector);
         vm.prank(BOB);
         v.checkIn();
     }
 
     function test_CheckIn_RevertsIfWithdrawn() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + 1 days);
         vm.prank(ALICE);
         v.emergencyWithdraw();
@@ -847,11 +624,7 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_CheckIn_DoesNotChangeState() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         uint256 amountBefore = v.amount();
         uint256 unlockBefore = v.unlockTimestamp();
         uint256 startBefore = v.lockStartedAt();
@@ -875,12 +648,7 @@ contract DiamondHandsVaultTest is Test {
         rt.mint(ALICE, INITIAL_BALANCE);
 
         // create vault: mock token does no attack during creation
-        DiamondHandsVault v = _createSoftVaultWithToken(
-            address(rt),
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVaultWithToken(address(rt), DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
 
         // arm attack: during transfer, try to call withdraw() again
         rt.setAttack(
@@ -900,19 +668,9 @@ contract DiamondHandsVaultTest is Test {
         MockReentrantToken rt = new MockReentrantToken();
         rt.mint(ALICE, INITIAL_BALANCE);
 
-        DiamondHandsVault v = _createSoftVaultWithToken(
-            address(rt),
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVaultWithToken(address(rt), DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
 
-        rt.setAttack(
-            address(v),
-            abi.encodeWithSelector(v.emergencyWithdraw.selector),
-            true,
-            false
-        );
+        rt.setAttack(address(v), abi.encodeWithSelector(v.emergencyWithdraw.selector), true, false);
 
         vm.warp(block.timestamp + 1 days);
         vm.prank(ALICE);
@@ -924,20 +682,10 @@ contract DiamondHandsVaultTest is Test {
         MockReentrantToken rt = new MockReentrantToken();
         rt.mint(ALICE, INITIAL_BALANCE);
 
-        DiamondHandsVault v = _createSoftVaultWithToken(
-            address(rt),
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVaultWithToken(address(rt), DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
 
         // attack on transferFrom: try to call topUp again
-        rt.setAttack(
-            address(v),
-            abi.encodeWithSelector(v.topUp.selector, uint256(1)),
-            false,
-            true
-        );
+        rt.setAttack(address(v), abi.encodeWithSelector(v.topUp.selector, uint256(1)), false, true);
 
         uint256 amountBefore = v.amount();
         vm.prank(ALICE);
@@ -955,40 +703,24 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_CurrentPenaltyBps_AfterUnlock_ReturnsZero() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + DEFAULT_LOCK);
         assertEq(v.currentPenaltyBps(), 0);
     }
 
     function test_CurrentPenaltyBps_AtStart_ReturnsMax() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            3000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 3000);
         assertEq(v.currentPenaltyBps(), 3000);
     }
 
     function test_CurrentPenaltyBps_AtMidpoint_ReturnsHalf() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + DEFAULT_LOCK / 2);
         assertEq(v.currentPenaltyBps(), 1000);
     }
 
     function test_CurrentPenaltyAmount_ScalesWithAmount() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         // at start, penaltyBps = 2000 → penaltyAmount = 100 * 0.2 = 20
         assertEq(v.currentPenaltyAmount(), (DEFAULT_AMOUNT * 2000) / 10000);
 
@@ -999,22 +731,14 @@ contract DiamondHandsVaultTest is Test {
     }
 
     function test_TimeLeft_BeforeUnlock() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         assertEq(v.timeLeft(), DEFAULT_LOCK);
         vm.warp(block.timestamp + 5 days);
         assertEq(v.timeLeft(), DEFAULT_LOCK - 5 days);
     }
 
     function test_TimeLeft_AfterUnlock_ReturnsZero() public {
-        DiamondHandsVault v = _createSoftVault(
-            DEFAULT_AMOUNT,
-            DEFAULT_LOCK,
-            2000
-        );
+        DiamondHandsVault v = _createSoftVault(DEFAULT_AMOUNT, DEFAULT_LOCK, 2000);
         vm.warp(block.timestamp + DEFAULT_LOCK + 1);
         assertEq(v.timeLeft(), 0);
     }

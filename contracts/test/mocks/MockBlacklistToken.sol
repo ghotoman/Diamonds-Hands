@@ -19,22 +19,14 @@ contract MockBlacklistToken is ERC20 {
         blacklisted[user] = true;
     }
 
-    function transfer(address to, uint256 amount)
-        public
-        override
-        returns (bool)
-    {
+    function transfer(address to, uint256 amount) public override returns (bool) {
         if (blacklisted[msg.sender] || blacklisted[to]) {
             revert("ERC20: blacklisted");
         }
         return super.transfer(to, amount);
     }
 
-    function transferFrom(address from, address to, uint256 amount)
-        public
-        override
-        returns (bool)
-    {
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
         if (blacklisted[from] || blacklisted[to]) {
             revert("ERC20: blacklisted");
         }

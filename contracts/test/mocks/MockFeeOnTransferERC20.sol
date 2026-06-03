@@ -20,10 +20,7 @@ contract MockFeeOnTransferERC20 is ERC20 {
         feeBps = _feeBps;
     }
 
-    function _update(address from, address to, uint256 value)
-        internal
-        override
-    {
+    function _update(address from, address to, uint256 value) internal override {
         // mint / burn оставляем без fee
         if (from == address(0) || to == address(0) || feeBps == 0) {
             super._update(from, to, value);

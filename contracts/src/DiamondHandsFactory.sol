@@ -97,16 +97,10 @@ contract DiamondHandsFactory is Ownable2Step, Pausable, ReentrancyGuard {
     );
 
     /// @notice Эмитится при смене `implementation` (для БУДУЩИХ клонов).
-    event ImplementationUpdated(
-        address indexed oldImpl,
-        address indexed newImpl
-    );
+    event ImplementationUpdated(address indexed oldImpl, address indexed newImpl);
 
     /// @notice Эмитится при смене `feeReceiver` (для БУДУЩИХ клонов).
-    event FeeReceiverUpdated(
-        address indexed oldReceiver,
-        address indexed newReceiver
-    );
+    event FeeReceiverUpdated(address indexed oldReceiver, address indexed newReceiver);
 
     // -----------------------------------------------------------------
     //                          CONSTRUCTOR
@@ -118,9 +112,7 @@ contract DiamondHandsFactory is Ownable2Step, Pausable, ReentrancyGuard {
     ///                        Должен содержать код (`code.length > 0`).
     /// @param _feeReceiver    Стартовый получатель штрафов для будущих
     ///                        Vault'ов. Не может быть `address(0)`.
-    constructor(address _implementation, address _feeReceiver)
-        Ownable(msg.sender)
-    {
+    constructor(address _implementation, address _feeReceiver) Ownable(msg.sender) {
         if (_implementation == address(0)) revert Errors.ZeroAddress();
         if (_implementation.code.length == 0) {
             revert Errors.ImplementationCodeMissing();
@@ -181,14 +173,8 @@ contract DiamondHandsFactory is Ownable2Step, Pausable, ReentrancyGuard {
 
         // Валидация maxPenaltyBps согласно режиму.
         if (allowEarlyExit) {
-            if (
-                maxPenaltyBps < MIN_USER_PENALTY_BPS ||
-                maxPenaltyBps > ABS_MAX_PENALTY_BPS
-            ) {
-                revert Errors.InvalidPenaltyForSoftMode(
-                    MIN_USER_PENALTY_BPS,
-                    ABS_MAX_PENALTY_BPS
-                );
+            if (maxPenaltyBps < MIN_USER_PENALTY_BPS || maxPenaltyBps > ABS_MAX_PENALTY_BPS) {
+                revert Errors.InvalidPenaltyForSoftMode(MIN_USER_PENALTY_BPS, ABS_MAX_PENALTY_BPS);
             }
         } else {
             if (maxPenaltyBps != 0) revert Errors.InvalidPenaltyForHardMode();
@@ -210,25 +196,11 @@ contract DiamondHandsFactory is Ownable2Step, Pausable, ReentrancyGuard {
         if (actualAmount == 0) revert Errors.TransferReceivedZero();
 
         // Initialize Vault — снапшот feeReceiver на момент создания.
-        IDiamondHandsVault(vault).initialize(
-            msg.sender,
-            asset,
-            actualAmount,
-            unlockTimestamp,
-            allowEarlyExit,
-            feeReceiver,
-            maxPenaltyBps
-        );
+        IDiamondHandsVault(vault)
+            .initialize(msg.sender, asset, actualAmount, unlockTimestamp, allowEarlyExit, feeReceiver, maxPenaltyBps);
 
         emit VaultCreated(
-            msg.sender,
-            vault,
-            asset,
-            actualAmount,
-            unlockTimestamp,
-            allowEarlyExit,
-            feeReceiver,
-            maxPenaltyBps
+            msg.sender, vault, asset, actualAmount, unlockTimestamp, allowEarlyExit, feeReceiver, maxPenaltyBps
         );
     }
 
@@ -306,11 +278,7 @@ contract DiamondHandsFactory is Ownable2Step, Pausable, ReentrancyGuard {
     ///         в газовый лимит RPC. Пагинация — кандидат на Фазу 2.
     /// @param user Адрес пользователя.
     /// @return Массив адресов Vault'ов в порядке создания.
-    function getVaultsByOwner(address user)
-        external
-        view
-        returns (address[] memory)
-    {
+    function getVaultsByOwner(address user) external view returns (address[] memory) {
         return vaultsByOwner[user];
     }
 }

@@ -13,20 +13,12 @@ contract MockRevertOnZeroTransferERC20 is ERC20 {
         _mint(to, amount);
     }
 
-    function transfer(address to, uint256 amount)
-        public
-        override
-        returns (bool)
-    {
+    function transfer(address to, uint256 amount) public override returns (bool) {
         if (amount == 0) revert("ERC20: zero transfer forbidden");
         return super.transfer(to, amount);
     }
 
-    function transferFrom(address from, address to, uint256 amount)
-        public
-        override
-        returns (bool)
-    {
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
         if (amount == 0) revert("ERC20: zero transferFrom forbidden");
         return super.transferFrom(from, to, amount);
     }

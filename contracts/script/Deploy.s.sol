@@ -14,10 +14,7 @@ import {DiamondHandsFactory} from "../src/DiamondHandsFactory.sol";
 ///         и переменные окружения в .env. Для локального dry-run
 ///         используется anvil + стандартный приватный ключ.
 contract Deploy is Script {
-    function run()
-        external
-        returns (DiamondHandsVault impl, DiamondHandsFactory factory)
-    {
+    function run() external returns (DiamondHandsVault impl, DiamondHandsFactory factory) {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address feeReceiver = vm.envAddress("FEE_RECEIVER");
 
