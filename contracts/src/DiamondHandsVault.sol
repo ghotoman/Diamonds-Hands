@@ -97,26 +97,15 @@ contract DiamondHandsVault is Initializable, ReentrancyGuard {
     ///                      (`amount - penaltyAmount`).
     /// @param penaltyAmount Сумма штрафа, которая пошла на `feeReceiver`
     ///                     (или 0, тогда отправка пропущена).
-    event EmergencyWithdrawn(
-        address indexed owner,
-        uint256 amountToOwner,
-        uint256 penaltyAmount
-    );
+    event EmergencyWithdrawn(address indexed owner, uint256 amountToOwner, uint256 penaltyAmount);
 
     /// @notice Эмитится при `topUp`. `addedAmount` — фактически
     ///         полученная дельта (для fee-on-transfer < заявленного).
-    event ToppedUp(
-        address indexed owner,
-        uint256 addedAmount,
-        uint256 newTotalAmount
-    );
+    event ToppedUp(address indexed owner, uint256 addedAmount, uint256 newTotalAmount);
 
     /// @notice Эмитится при `extendLock`. Параллельно сбрасывается
     ///         `lockStartedAt` (penalty-кривая рестартится).
-    event LockExtended(
-        uint256 oldUnlockTimestamp,
-        uint256 newUnlockTimestamp
-    );
+    event LockExtended(uint256 oldUnlockTimestamp, uint256 newUnlockTimestamp);
 
     /// @notice Эмитится при `checkIn` — no-op для будущих бэйджей
     ///         стрика. Существование events позволяет считать

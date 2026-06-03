@@ -39,14 +39,8 @@ contract DiamondHandsFactoryTest is Test {
         address feeReceiver,
         uint16 maxPenaltyBps
     );
-    event ImplementationUpdated(
-        address indexed oldImpl,
-        address indexed newImpl
-    );
-    event FeeReceiverUpdated(
-        address indexed oldReceiver,
-        address indexed newReceiver
-    );
+    event ImplementationUpdated(address indexed oldImpl, address indexed newImpl);
+    event FeeReceiverUpdated(address indexed oldReceiver, address indexed newReceiver);
 
     function setUp() public {
         vm.warp(1_700_000_000);
@@ -64,18 +58,9 @@ contract DiamondHandsFactoryTest is Test {
         token.approve(address(factory), type(uint256).max);
     }
 
-    function _createSoftVault(uint256 amount, uint256 lockSeconds, uint16 bps)
-        internal
-        returns (address)
-    {
+    function _createSoftVault(uint256 amount, uint256 lockSeconds, uint16 bps) internal returns (address) {
         vm.prank(ALICE);
-        return factory.createVault(
-            address(token),
-            amount,
-            block.timestamp + lockSeconds,
-            true,
-            bps
-        );
+        return factory.createVault(address(token), amount, block.timestamp + lockSeconds, true, bps);
     }
 
     // =================================================================
@@ -128,13 +113,7 @@ contract DiamondHandsFactoryTest is Test {
 
     function test_CreateVault_HardMode_DeploysClone() public {
         vm.prank(ALICE);
-        address vault = factory.createVault(
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            false,
-            0
-        );
+        address vault = factory.createVault(address(token), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, false, 0);
         assertTrue(vault != address(0));
         assertFalse(DiamondHandsVault(vault).allowEarlyExit());
         assertEq(DiamondHandsVault(vault).maxPenaltyBps(), 0);
@@ -150,13 +129,7 @@ contract DiamondHandsFactoryTest is Test {
     function test_CreateVault_InitializesCloneCorrectly() public {
         uint256 unlockTs = block.timestamp + DEFAULT_LOCK;
         vm.prank(ALICE);
-        address vault = factory.createVault(
-            address(token),
-            DEFAULT_AMOUNT,
-            unlockTs,
-            true,
-            2500
-        );
+        address vault = factory.createVault(address(token), DEFAULT_AMOUNT, unlockTs, true, 2500);
         DiamondHandsVault v = DiamondHandsVault(vault);
         assertEq(v.owner(), ALICE);
         assertEq(v.asset(), address(token));
@@ -195,35 +168,21 @@ contract DiamondHandsFactoryTest is Test {
         // be present without strict address match.
         vm.recordLogs();
         vm.prank(ALICE);
-        address vault = factory.createVault(
-            address(token),
-            DEFAULT_AMOUNT,
-            unlockTs,
-            true,
-            2000
-        );
+        address vault = factory.createVault(address(token), DEFAULT_AMOUNT, unlockTs, true, 2000);
         // Now we have the actual vault address — assert event payload manually
         // via decoded logs.
         Vm.Log[] memory logs = vm.getRecordedLogs();
         bool found = false;
-        bytes32 sig = keccak256(
-            "VaultCreated(address,address,address,uint256,uint256,bool,address,uint16)"
-        );
+        bytes32 sig = keccak256("VaultCreated(address,address,address,uint256,uint256,bool,address,uint16)");
         for (uint256 i = 0; i < logs.length; i++) {
             if (
-                logs[i].emitter == address(factory) &&
-                logs[i].topics[0] == sig &&
-                address(uint160(uint256(logs[i].topics[1]))) == ALICE &&
-                address(uint160(uint256(logs[i].topics[2]))) == vault &&
-                address(uint160(uint256(logs[i].topics[3]))) == address(token)
+                logs[i].emitter == address(factory) && logs[i].topics[0] == sig
+                    && address(uint160(uint256(logs[i].topics[1]))) == ALICE
+                    && address(uint160(uint256(logs[i].topics[2]))) == vault
+                    && address(uint160(uint256(logs[i].topics[3]))) == address(token)
             ) {
-                (
-                    uint256 amt,
-                    uint256 unlock,
-                    bool early,
-                    address fr,
-                    uint16 bps
-                ) = abi.decode(logs[i].data, (uint256, uint256, bool, address, uint16));
+                (uint256 amt, uint256 unlock, bool early, address fr, uint16 bps) =
+                    abi.decode(logs[i].data, (uint256, uint256, bool, address, uint16));
                 assertEq(amt, DEFAULT_AMOUNT);
                 assertEq(unlock, unlockTs);
                 assertTrue(early);
@@ -243,13 +202,7 @@ contract DiamondHandsFactoryTest is Test {
         fot.approve(address(factory), type(uint256).max);
 
         vm.prank(ALICE);
-        address vault = factory.createVault(
-            address(fot),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            2000
-        );
+        address vault = factory.createVault(address(fot), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, 2000);
         uint256 expected = (DEFAULT_AMOUNT * 9500) / 10000;
         // vault stored actualAmount = expected, not DEFAULT_AMOUNT
         assertEq(DiamondHandsVault(vault).amount(), expected);
@@ -274,50 +227,26 @@ contract DiamondHandsFactoryTest is Test {
     function test_CreateVault_RevertsOnZeroAsset() public {
         vm.expectRevert(Errors.EthNotSupported.selector);
         vm.prank(ALICE);
-        factory.createVault(
-            address(0),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            2000
-        );
+        factory.createVault(address(0), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, 2000);
     }
 
     function test_CreateVault_RevertsOnAssetWithoutCode() public {
         vm.expectRevert(Errors.InvalidAsset.selector);
         vm.prank(ALICE);
-        factory.createVault(
-            address(0xDEAD),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            2000
-        );
+        factory.createVault(address(0xDEAD), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, 2000);
     }
 
     function test_CreateVault_RevertsOnZeroAmount() public {
         vm.expectRevert(Errors.AmountZero.selector);
         vm.prank(ALICE);
-        factory.createVault(
-            address(token),
-            0,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            2000
-        );
+        factory.createVault(address(token), 0, block.timestamp + DEFAULT_LOCK, true, 2000);
     }
 
     function test_CreateVault_RevertsOnUnlockTooSoon() public {
         // less than MIN_LOCK_DURATION = 7 days
         vm.expectRevert();
         vm.prank(ALICE);
-        factory.createVault(
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + 6 days,
-            true,
-            2000
-        );
+        factory.createVault(address(token), DEFAULT_AMOUNT, block.timestamp + 6 days, true, 2000);
     }
 
     function test_CreateVault_RevertsOnUnlockTooFar() public {
@@ -335,13 +264,7 @@ contract DiamondHandsFactoryTest is Test {
     function test_CreateVault_RevertsOnUnlockInPast() public {
         vm.expectRevert();
         vm.prank(ALICE);
-        factory.createVault(
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp - 1,
-            true,
-            2000
-        );
+        factory.createVault(address(token), DEFAULT_AMOUNT, block.timestamp - 1, true, 2000);
     }
 
     function test_CreateVault_SoftMode_RevertsOnPenaltyTooLow() public {
@@ -371,26 +294,14 @@ contract DiamondHandsFactoryTest is Test {
     function test_CreateVault_HardMode_RevertsOnNonZeroPenalty() public {
         vm.expectRevert(Errors.InvalidPenaltyForHardMode.selector);
         vm.prank(ALICE);
-        factory.createVault(
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            false,
-            500
-        );
+        factory.createVault(address(token), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, false, 500);
     }
 
     function test_CreateVault_RevertsWhenPaused() public {
         factory.pause();
         vm.expectRevert(Pausable.EnforcedPause.selector);
         vm.prank(ALICE);
-        factory.createVault(
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            2000
-        );
+        factory.createVault(address(token), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, 2000);
     }
 
     function test_CreateVault_RevertsOnZeroActualReceived() public {
@@ -401,13 +312,7 @@ contract DiamondHandsFactoryTest is Test {
 
         vm.expectRevert(Errors.TransferReceivedZero.selector);
         vm.prank(ALICE);
-        factory.createVault(
-            address(fot),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            2000
-        );
+        factory.createVault(address(fot), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, 2000);
     }
 
     function test_CreateVault_RevertsWithoutApproval() public {
@@ -418,13 +323,7 @@ contract DiamondHandsFactoryTest is Test {
 
         vm.expectRevert(); // ERC20InsufficientAllowance from OZ
         vm.prank(BOB);
-        factory.createVault(
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            2000
-        );
+        factory.createVault(address(token), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, 2000);
     }
 
     // =================================================================
@@ -439,12 +338,7 @@ contract DiamondHandsFactoryTest is Test {
 
     function test_SetImplementation_OnlyOwner() public {
         DiamondHandsVault newImpl = new DiamondHandsVault();
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Ownable.OwnableUnauthorizedAccount.selector,
-                ALICE
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, ALICE));
         vm.prank(ALICE);
         factory.setImplementation(address(newImpl));
     }
@@ -487,12 +381,7 @@ contract DiamondHandsFactoryTest is Test {
     }
 
     function test_SetFeeReceiver_OnlyOwner() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Ownable.OwnableUnauthorizedAccount.selector,
-                ALICE
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, ALICE));
         vm.prank(ALICE);
         factory.setFeeReceiver(ALT_FEE);
     }
@@ -517,24 +406,14 @@ contract DiamondHandsFactoryTest is Test {
     // =================================================================
 
     function test_Pause_OnlyOwner() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Ownable.OwnableUnauthorizedAccount.selector,
-                ALICE
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, ALICE));
         vm.prank(ALICE);
         factory.pause();
     }
 
     function test_Unpause_OnlyOwner() public {
         factory.pause();
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Ownable.OwnableUnauthorizedAccount.selector,
-                ALICE
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, ALICE));
         vm.prank(ALICE);
         factory.unpause();
     }
@@ -543,13 +422,7 @@ contract DiamondHandsFactoryTest is Test {
         factory.pause();
         vm.expectRevert(Pausable.EnforcedPause.selector);
         vm.prank(ALICE);
-        factory.createVault(
-            address(token),
-            DEFAULT_AMOUNT,
-            block.timestamp + DEFAULT_LOCK,
-            true,
-            2000
-        );
+        factory.createVault(address(token), DEFAULT_AMOUNT, block.timestamp + DEFAULT_LOCK, true, 2000);
     }
 
     function test_Pause_DoesNotBlockExistingVaults() public {

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Отменяем устаревшие прогоны на той же ветке/PR, чтобы не жечь раннеры.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Профиль ci из foundry.toml: 1000 fuzz-runs, verbosity 4.
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  foundry:
+    name: Foundry build & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # Foundry-проект живёт в contracts/, корень репо — монорепо.
+        working-directory: contracts
+    steps:
+      - name: Checkout (с submodules — зависимости forge-std и OZ)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Forge version
+        run: forge --version
+
+      - name: Check formatting (forge fmt --check)
+        run: forge fmt --check
+
+      - name: Build (с проверкой размеров байткода)
+        run: forge build --sizes
+
+      - name: Run tests
+        run: forge test -vvv
