@@ -120,14 +120,22 @@ export function VaultDetail({
       )}
 
       {/* check-in streak */}
-      {v.status === "active" && !unlocked && v.checkIns !== undefined && (
+      {v.status === "active" && !unlocked && (
         <div className="mx-5 mt-4 flex items-center gap-3 rounded-2xl bg-surface border border-line p-4">
           <span className="grid place-items-center w-10 h-10 rounded-xl bg-[#F59E0B14] text-warning">
             <Icon name="flame" size={20} />
           </span>
           <div className="flex-1">
-            <div className="text-[14px] font-semibold text-ink">{v.checkIns} check-ins in a row</div>
-            <div className="text-[12px] text-sub">{checkedToday ? "Checked in today ✓" : "Not checked in today"}</div>
+            <div className="text-[14px] font-semibold text-ink">
+              {v.checkIns !== undefined ? `${v.checkIns} check-ins in a row` : "Daily check-in"}
+            </div>
+            <div className="text-[12px] text-sub">
+              {checkedToday
+                ? "Checked in today ✓"
+                : v.checkIns !== undefined
+                  ? "Not checked in today"
+                  : "Build your streak on-chain"}
+            </div>
           </div>
           <Button
             size="sm"

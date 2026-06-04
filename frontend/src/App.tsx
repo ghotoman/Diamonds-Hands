@@ -1,9 +1,13 @@
 import { useState } from "react";
+import { useAccount, useConnect, useSwitchChain } from "wagmi";
 import type { Address } from "viem";
 import type { Vault } from "./types";
-import { DAY, fmtNum, currentPenaltyPct } from "./lib/helpers";
+import { DAY, fmtNum, currentPenaltyPct, shortAddr } from "./lib/helpers";
 import { useTick } from "./lib/useTick";
 import { MOCK_VAULTS } from "./lib/mock";
+import { CHAIN_ID } from "./web3/contracts";
+import { FARCASTER_CONNECTOR_ID } from "./web3/config";
+import { useVaults } from "./web3/useVaults";
 import { Icon } from "./components/Icon";
 import { Logo } from "./components/Logo";
 import { Button } from "./components/Button";
@@ -100,9 +104,90 @@ const randAddr = () =>
     Math.random().toString(16).slice(2, 6) +
     Math.random().toString(16).slice(2, 38)) as Address;
 
+// ── Dashboard data states (live mode) ──────────────────────────────────────
+function ConnectGate({ onConnect, connecting }: { onConnect: () => void; connecting: boolean }) {
+  return (
+    <div className="px-6 pt-10 pb-32">
+      <div className="rounded-2xl bg-surface border border-line p-8 text-center">
+        <div className="mx-auto mb-5 grid place-items-center">
+          <Logo size={56} />
+        </div>
+        <h1 className="text-[24px] font-bold text-ink leading-tight tracking-tight">Connect your wallet</h1>
+        <p className="mt-3 text-[15px] text-sub leading-relaxed text-balance">
+          Diamond Hands reads your vaults straight from Base. Connect to see what you've locked.
+        </p>
+        <Button className="w-full mt-7" loading={connecting} onClick={onConnect}>
+          <Icon name="spark" size={18} />
+          Connect wallet
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function SwitchPrompt({ onSwitch, switching }: { onSwitch: () => void; switching: boolean }) {
+  return (
+    <div className="px-6 pt-10 pb-32">
+      <div className="rounded-2xl bg-surface border border-line p-8 text-center">
+        <div className="mx-auto mb-4 grid place-items-center w-12 h-12 rounded-full bg-[#F59E0B14] text-warning">
+          <Icon name="info" size={26} />
+        </div>
+        <h1 className="text-[22px] font-bold text-ink leading-tight">Wrong network</h1>
+        <p className="mt-2 text-[15px] text-sub leading-relaxed text-balance">
+          Diamond Hands runs on Base Sepolia. Switch your wallet to continue.
+        </p>
+        <Button className="w-full mt-6" loading={switching} onClick={onSwitch}>
+          <Icon name="refresh" size={18} />
+          Switch to Base Sepolia
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="px-6 pt-24 flex flex-col items-center text-center">
+      <Spinner size={40} />
+      <p className="mt-4 text-[14px] text-sub">Loading your vaults…</p>
+    </div>
+  );
+}
+
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="px-6 pt-10 pb-32">
+      <div className="rounded-2xl bg-surface border border-line p-8 text-center">
+        <div className="mx-auto mb-4 grid place-items-center w-12 h-12 rounded-full bg-[#E11D4814] text-danger">
+          <Icon name="info" size={26} />
+        </div>
+        <h1 className="text-[20px] font-bold text-ink leading-tight">Couldn't load your vaults</h1>
+        <p className="mt-2 text-[14px] text-sub leading-relaxed text-balance">
+          The Base RPC didn't answer. Check your connection and try again.
+        </p>
+        <Button className="w-full mt-6" variant="secondary" onClick={onRetry}>
+          <Icon name="refresh" size={18} />
+          Retry
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const now = useTick(1000);
-  const [vaults, setVaults] = useState<Vault[]>(MOCK_VAULTS);
+
+  // wallet / network
+  const { address, isConnected, chainId } = useAccount();
+  const { connect, connectors, isPending: connecting } = useConnect();
+  const { switchChain, isPending: switching } = useSwitchChain();
+  const wrongNetwork = isConnected && chainId !== CHAIN_ID;
+
+  // data source: live on-chain reads, or the mock prototype (demo toggle)
+  const [demo, setDemo] = useState(false); // prototype only
+  const live = useVaults(!demo && isConnected && !wrongNetwork ? address : undefined);
+  const [mock, setMock] = useState<Vault[]>(MOCK_VAULTS); // demo data + mock writes
+
   const [screen, setScreen] = useState<"dashboard" | "create" | "vault">("dashboard");
   const [activeId, setActiveId] = useState<Address | null>(null);
   const [emergency, setEmergency] = useState<Vault | null>(null);
@@ -112,10 +197,26 @@ export default function App() {
     v: null,
   });
   const [tx, setTx] = useState<TxState>(null);
-  const [demoEmpty, setDemoEmpty] = useState(false); // prototype only
 
-  const activeVault = vaults.find((v) => v.address === activeId);
-  const shown = demoEmpty ? [] : vaults;
+  const source = demo ? mock : live.vaults;
+  const activeVault = source.find((v) => v.address === activeId);
+
+  // is the dashboard showing a real list (vs. a gate/loading/error state)?
+  const dashReady = demo || (isConnected && !wrongNetwork && !live.isLoading && !live.isError);
+  const showCreateCta = screen === "dashboard" && dashReady && source.length > 0;
+
+  const openVault = (id: string) => {
+    setActiveId(id as Address);
+    setScreen("vault");
+  };
+
+  const onConnect = () => {
+    const pick =
+      connectors.find((c) => c.id === "coinbaseWalletSDK") ??
+      connectors.find((c) => c.id === "injected") ??
+      connectors.find((c) => c.id !== FARCASTER_CONNECTOR_ID);
+    if (pick) connect({ connector: pick });
+  };
 
   // mock async tx runner — shaped like a future viem writeContract flow.
   // prototype only: replaced by real wagmi/viem writes in Stage 4.
@@ -160,6 +261,11 @@ export default function App() {
       },
     })[kind] || { title: "Something went wrong", error: "The transaction failed. Try again." };
 
+  // after a (mock) tx settles, refresh the live reads so on-chain truth wins.
+  const afterTx = () => {
+    if (!demo) live.refetch();
+  };
+
   // ── action dispatch ──
   const onCreateSubmit = (form: CreateForm) => {
     setScreen("dashboard");
@@ -184,8 +290,8 @@ export default function App() {
           checkIns: 0,
           lastCheckIn: 0,
         };
-        setVaults((vs) => [fresh, ...vs]);
-        setDemoEmpty(false);
+        setMock((vs) => [fresh, ...vs]);
+        afterTx();
       },
     });
   };
@@ -200,9 +306,10 @@ export default function App() {
       return;
     }
     if (kind === "checkin") {
-      setVaults((vs) =>
+      setMock((vs) =>
         vs.map((x) => (x.address === v.address ? { ...x, checkIns: (x.checkIns ?? 0) + 1, lastCheckIn: Date.now() } : x)),
       );
+      afterTx();
       return;
     }
     if (kind === "withdraw") {
@@ -210,7 +317,8 @@ export default function App() {
         steps: [{ title: "Confirm withdrawal", sub: "Sign the withdrawal in your wallet" }],
         success: { title: "Withdrawn ✓", sub: `${fmtNum(v.amount)} ${v.token.sym} in your wallet` },
         onDone: () => {
-          setVaults((vs) => vs.map((x) => (x.address === v.address ? { ...x, status: "withdrawn" } : x)));
+          setMock((vs) => vs.map((x) => (x.address === v.address ? { ...x, status: "withdrawn" } : x)));
+          afterTx();
           setScreen("dashboard");
         },
       });
@@ -225,8 +333,8 @@ export default function App() {
         kind === "topup"
           ? { title: "Topped up ✓", sub: `+${fmtNum(num)} ${v.token.sym} in the vault` }
           : { title: "Term extended ✓", sub: `+${num} days added` },
-      onDone: () =>
-        setVaults((vs) =>
+      onDone: () => {
+        setMock((vs) =>
           vs.map((x) =>
             x.address === v.address
               ? kind === "topup"
@@ -234,7 +342,9 @@ export default function App() {
                 : { ...x, unlock: x.unlock + num * DAY }
               : x,
           ),
-        ),
+        );
+        afterTx();
+      },
     });
   };
 
@@ -246,7 +356,8 @@ export default function App() {
       steps: [{ title: "Confirm early exit", sub: "Sign the penalized transaction" }],
       success: { title: "Exit done", sub: `Received ${fmtNum(receive)} ${v.token.sym} (penalty ${pen.toFixed(1)}%)` },
       onDone: () => {
-        setVaults((vs) => vs.map((x) => (x.address === v.address ? { ...x, status: "withdrawn" } : x)));
+        setMock((vs) => vs.map((x) => (x.address === v.address ? { ...x, status: "withdrawn" } : x)));
+        afterTx();
         setScreen("dashboard");
       },
     });
@@ -294,32 +405,53 @@ export default function App() {
           <Logo size={26} />
           <span className="text-[16px] font-bold text-ink tracking-tight">Diamond Hands</span>
         </button>
-        <div className="flex items-center gap-1.5 rounded-full bg-surface border border-line pl-2 pr-2.5 h-8">
-          <span className="w-4 h-4 rounded-full" style={{ background: "linear-gradient(135deg,#3D3DFF,#0000FF)" }} />
-          <span className="text-[12px] font-semibold text-ink tabular-nums">0x7a…c4</span>
-        </div>
+        {demo ? (
+          <div className="flex items-center gap-1.5 rounded-full bg-surface border border-line pl-2 pr-2.5 h-8">
+            <span className="w-4 h-4 rounded-full" style={{ background: "linear-gradient(135deg,#3D3DFF,#0000FF)" }} />
+            <span className="text-[12px] font-semibold text-ink tabular-nums">0x7a…c4</span>
+          </div>
+        ) : isConnected ? (
+          <div className="flex items-center gap-1.5 rounded-full bg-surface border border-line pl-2 pr-2.5 h-8">
+            <span
+              className="w-4 h-4 rounded-full"
+              style={{ background: wrongNetwork ? "#F59E0B" : "linear-gradient(135deg,#3D3DFF,#0000FF)" }}
+            />
+            <span className="text-[12px] font-semibold text-ink tabular-nums">{shortAddr(address)}</span>
+          </div>
+        ) : (
+          <button
+            onClick={onConnect}
+            disabled={connecting}
+            className="flex items-center gap-1.5 rounded-full bg-baseblue text-white px-3 h-8 text-[12px] font-semibold disabled:opacity-60"
+          >
+            {connecting ? "Connecting…" : "Connect"}
+          </button>
+        )}
       </div>
 
       {/* scrollable app surface */}
       <div className="dh-surface flex-1 overflow-y-auto relative bg-white">
-        {screen === "dashboard" && (
-          <Dashboard
-            vaults={shown}
-            now={now}
-            onOpen={(id) => {
-              setActiveId(id as Address);
-              setScreen("vault");
-            }}
-            onCreate={() => setScreen("create")}
-          />
-        )}
+        {screen === "dashboard" &&
+          (demo ? (
+            <Dashboard vaults={mock} now={now} onOpen={openVault} onCreate={() => setScreen("create")} />
+          ) : !isConnected ? (
+            <ConnectGate onConnect={onConnect} connecting={connecting} />
+          ) : wrongNetwork ? (
+            <SwitchPrompt onSwitch={() => switchChain({ chainId: CHAIN_ID })} switching={switching} />
+          ) : live.isLoading ? (
+            <LoadingState />
+          ) : live.isError ? (
+            <ErrorState onRetry={live.refetch} />
+          ) : (
+            <Dashboard vaults={live.vaults} now={now} onOpen={openVault} onCreate={() => setScreen("create")} />
+          ))}
         {screen === "create" && <CreateFlow onCancel={() => setScreen("dashboard")} onSubmit={onCreateSubmit} />}
         {screen === "vault" && activeVault && (
           <VaultDetail v={activeVault} now={now} onBack={() => setScreen("dashboard")} onAction={onVaultAction} />
         )}
 
         {/* sticky create CTA on dashboard */}
-        {screen === "dashboard" && shown.length > 0 && (
+        {showCreateCta && (
           <div className="sticky bottom-0 px-5 pb-4 pt-6 bg-gradient-to-t from-white via-white to-transparent pointer-events-none">
             <Button className="w-full pointer-events-auto" onClick={() => setScreen("create")}>
               <Icon name="plus" size={20} stroke={2.4} />
@@ -332,10 +464,10 @@ export default function App() {
       {/* demo toggle (prototype only) */}
       {screen === "dashboard" && (
         <button
-          onClick={() => setDemoEmpty((e) => !e)}
+          onClick={() => setDemo((d) => !d)}
           className="absolute top-1 left-1/2 -translate-x-1/2 z-50 text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-ink/70 text-white/90 backdrop-blur"
         >
-          {demoEmpty ? "◍ demo: empty" : "◍ demo: data"}
+          {demo ? "◍ demo data" : "◍ live"}
         </button>
       )}
 
