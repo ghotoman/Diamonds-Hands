@@ -121,7 +121,8 @@ export function Dashboard({
 
   if (vaults.length === 0) return <EmptyState onCreate={onCreate} />;
 
-  const totalUsd = active.reduce((s, v) => s + (usd(v) ?? 0), 0);
+  const priced = active.filter((v) => usd(v) !== undefined);
+  const totalUsd = priced.length ? priced.reduce((s, v) => s + (usd(v) as number), 0) : undefined;
   const availCount = active.filter((v) => isUnlocked(v, now)).length;
 
   return (
