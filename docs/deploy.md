@@ -147,53 +147,49 @@ cast call $IMPL "initialize(address,address,uint256,uint256,bool,address,uint16)
 
 ---
 
-## 7. Верификация (Etherscan V2)
+## 7. Верификация
 
-⚠️ Etherscan отключил V1 per-chain эндпоинты (`api-sepolia.basescan.org`).
-Нужен **ключ Etherscan** (etherscan.io — один ключ на все сети, включая
-Base) и V2-эндпоинт. `foundry.toml` уже настроен на V2 и читает
-`ETHERSCAN_API_KEY`. Добавь его в `.env`:
+Адреса:
 
 ```bash
-ETHERSCAN_API_KEY=...   # бесплатно на https://etherscan.io/myapikey
-```
-
-Затем верифицируй уже задеплоенные контракты (Base Sepolia):
-
-```bash
-# ВАЖНО: forge читает .env для своего конфига, но $ETHERSCAN_API_KEY
-# в командной строке раскрывает bash — поэтому подгрузим .env в шелл:
-set -a; source .env; set +a
-echo "${ETHERSCAN_API_KEY:0:6}..."   # должно быть непусто
-
 IMPL=0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e
 FACTORY=0x89de426deF37Aa34c17f72d6a73229E64dd93e11
 FEE=0x51eEE5409d3126505adF87F7EE5B96ae3e468e30
+```
 
-# Vault — без аргументов конструктора
+### 7a. Sourcify (keyless — самый надёжный путь)
+
+Не требует API-ключа и обходит всю etherscan-конфигурацию. BaseScan
+подтягивает Sourcify-матчи и показывает исходники.
+
+```bash
 forge verify-contract "$IMPL" src/DiamondHandsVault.sol:DiamondHandsVault \
-  --chain 84532 --watch \
-  --verifier-url https://api.etherscan.io/v2/api \
-  --etherscan-api-key "$ETHERSCAN_API_KEY"
+  --chain 84532 --verifier sourcify
 
-# Factory — конструктор (implementation, feeReceiver)
 forge verify-contract "$FACTORY" src/DiamondHandsFactory.sol:DiamondHandsFactory \
-  --chain 84532 --watch \
-  --verifier-url https://api.etherscan.io/v2/api \
-  --etherscan-api-key "$ETHERSCAN_API_KEY" \
+  --chain 84532 --verifier sourcify \
   --constructor-args $(cast abi-encode "constructor(address,address)" "$IMPL" "$FEE")
 ```
 
-> **Без ключа** можно верифицировать через Sourcify (keyless):
-> ```bash
-> forge verify-contract $IMPL src/DiamondHandsVault.sol:DiamondHandsVault \
->   --chain 84532 --verifier sourcify
-> forge verify-contract $FACTORY src/DiamondHandsFactory.sol:DiamondHandsFactory \
->   --chain 84532 --verifier sourcify \
->   --constructor-args $(cast abi-encode "constructor(address,address)" $IMPL $FEE)
-> ```
-> BaseScan подтягивает Sourcify-матчи, но Etherscan V2 даёт «зелёную
-> галочку» прямо на странице обозревателя.
+### 7b. Etherscan V2 (для «зелёной галочки» на самой странице BaseScan)
+
+Etherscan отключил V1 per-chain эндпоинты; нужен **ключ Etherscan**
+(etherscan.io, один ключ на все сети). ⚠️ НЕ передавай `--verifier-url`
+и НЕ указывай `url` в `foundry.toml`: V2 требует `?chainid=`, который
+forge добавляет только когда сам строит URL из поля `chain`. Явный url
+ломает запрос («Missing chainid parameter»). `foundry.toml` уже
+настроен правильно (key + chain, без url).
+
+```bash
+export ETHERSCAN_API_KEY=ВСТАВЬ_КЛЮЧ   # с https://etherscan.io/myapikey
+
+forge verify-contract "$IMPL" src/DiamondHandsVault.sol:DiamondHandsVault \
+  --chain 84532 --watch --etherscan-api-key "$ETHERSCAN_API_KEY"
+
+forge verify-contract "$FACTORY" src/DiamondHandsFactory.sol:DiamondHandsFactory \
+  --chain 84532 --watch --etherscan-api-key "$ETHERSCAN_API_KEY" \
+  --constructor-args $(cast abi-encode "constructor(address,address)" "$IMPL" "$FEE")
+```
 
 ---
 
