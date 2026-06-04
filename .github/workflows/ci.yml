@@ -4,6 +4,12 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  # Ежедневный полный прогон invariant-сьюта (только на default-ветке —
+  # таково поведение schedule в GitHub Actions).
+  schedule:
+    - cron: "0 6 * * *" # каждый день в 06:00 UTC
+  # Ручной запуск из вкладки Actions — гоняет ОБА job'а (полная проверка).
+  workflow_dispatch:
 
 # Отменяем устаревшие прогоны на той же ветке/PR, чтобы не жечь раннеры.
 concurrency:
@@ -15,8 +21,11 @@ env:
   FOUNDRY_PROFILE: ci
 
 jobs:
-  foundry:
-    name: Foundry build & test
+  # Быстрый гейт на каждый push/PR: fmt + build + 104 unit-теста (~1 мин).
+  # Invariant-сьют исключён, чтобы не растягивать push до ~8 минут.
+  unit:
+    name: Unit (fmt, build, unit tests)
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -46,5 +55,31 @@ jobs:
       - name: Build (с проверкой размеров байткода)
         run: forge build --sizes
 
-      - name: Run tests
-        run: forge test -vvv
+      - name: Unit tests (без invariant-сьюта)
+        run: forge test --no-match-path 'test/Invariants.t.sol' -vvv
+
+  # Тяжёлый invariant-сьют (~7 мин): по расписанию (ежедневно на main)
+  # и по ручному запросу. НЕ блокирует обычные push/PR.
+  invariant:
+    name: Invariant suite
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - name: Checkout (с submodules — зависимости forge-std и OZ)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Forge version
+        run: forge --version
+
+      - name: Invariant tests
+        run: forge test --match-path 'test/Invariants.t.sol' -vvv
