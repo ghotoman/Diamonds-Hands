@@ -261,11 +261,15 @@ export default function App() {
   };
 
   const onConnect = () => {
+    const byId = (id: string) => connectors.find((c) => c.id === id);
+    // browser: prefer an installed extension (MetaMask / Coinbase ext) over
+    // the Coinbase smart-wallet popup; fall back to it when no provider exists.
+    const hasInjected = typeof window !== "undefined" && "ethereum" in window;
     const pick = inMiniApp
-      ? connectors.find((c) => c.id === FARCASTER_CONNECTOR_ID)
-      : (connectors.find((c) => c.id === "coinbaseWalletSDK") ??
-        connectors.find((c) => c.id === "injected") ??
-        connectors.find((c) => c.id !== FARCASTER_CONNECTOR_ID));
+      ? byId(FARCASTER_CONNECTOR_ID)
+      : hasInjected
+        ? (byId("injected") ?? byId("coinbaseWalletSDK"))
+        : (byId("coinbaseWalletSDK") ?? byId("injected"));
     if (pick) connect({ connector: pick });
   };
 
