@@ -2,8 +2,8 @@ import { http, createConfig } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { coinbaseWallet, injected } from "wagmi/connectors";
 
-/// wagmi-конфигурация V1: только Base Sepolia, коннекторы injected
-/// (MetaMask/Rabbit/Base App webview) и Coinbase Wallet.
+/// wagmi config V1: Base Sepolia only, connectors injected
+/// (MetaMask / Rabby / in-wallet webview) and Coinbase Wallet.
 export const config = createConfig({
   chains: [baseSepolia],
   connectors: [

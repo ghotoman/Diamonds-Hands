@@ -2,7 +2,7 @@ import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { TARGET_CHAIN } from "../lib/addresses";
 import { shortAddr } from "../lib/format";
 
-/// Кнопка подключения кошелька + гейт по сети (Base Sepolia).
+/// Wallet connect button + network gate (Base Sepolia).
 export function ConnectButton() {
   const { address, isConnected, chainId } = useAccount();
   const { connect, connectors, status } = useConnect();

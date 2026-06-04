@@ -61,7 +61,7 @@ export function VaultCard({
 
   const fmt = (v?: bigint) => (v === undefined ? "—" : formatUnits(v, decimals));
 
-  // одно перо для write-действий Vault'а
+  // single hook for the vault write actions
   const action = useWriteContract();
   const actionRcpt = useWaitForTransactionReceipt({ hash: action.data });
   useEffect(() => {
@@ -94,25 +94,25 @@ export function VaultCard({
             {allowEarlyExit ? "Soft" : "Hard"}
           </Badge>
           {withdrawn ? (
-            <Badge tone="slate">Закрыт</Badge>
+            <Badge tone="slate">Closed</Badge>
           ) : locked ? (
-            <Badge tone="amber">Залочен</Badge>
+            <Badge tone="amber">Locked</Badge>
           ) : (
-            <Badge tone="emerald">Разлочен</Badge>
+            <Badge tone="emerald">Unlocked</Badge>
           )}
         </div>
       </div>
 
       <dl className="space-y-1.5 text-sm">
-        <Row k="Сумма">
+        <Row k="Amount">
           {fmt(amount)} {symbol}
         </Row>
-        <Row k="Анлок">{unlockTs ? formatTimestamp(unlockTs) : "—"}</Row>
-        <Row k="Осталось">
+        <Row k="Unlock">{unlockTs ? formatTimestamp(unlockTs) : "—"}</Row>
+        <Row k="Time left">
           {timeLeft !== undefined ? humanDuration(timeLeft) : "—"}
         </Row>
         {allowEarlyExit && (
-          <Row k="Штраф сейчас">
+          <Row k="Penalty now">
             {penaltyBps !== undefined ? bpsToPercent(penaltyBps) : "—"} (
             {fmt(penaltyAmt)} {symbol}) · max{" "}
             {maxPenaltyBps !== undefined ? bpsToPercent(maxPenaltyBps) : "—"}
@@ -138,7 +138,8 @@ export function VaultCard({
                 pending={action.isPending || actionRcpt.isLoading}
                 tone="rose"
               >
-                Exit early (−{penaltyBps !== undefined ? bpsToPercent(penaltyBps) : "?"})
+                Exit early (−
+                {penaltyBps !== undefined ? bpsToPercent(penaltyBps) : "?"})
               </ActionBtn>
             )}
             <ActionBtn
@@ -178,7 +179,7 @@ export function VaultCard({
   );
 }
 
-// ---- topUp с approve ----
+// ---- topUp with approve ----
 function TopUp({
   vault,
   asset,
@@ -227,7 +228,8 @@ function TopUp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topupRcpt.isSuccess]);
 
-  const needsApprove = wei !== undefined && (allowance === undefined || allowance < wei);
+  const needsApprove =
+    wei !== undefined && (allowance === undefined || allowance < wei);
   const inputCls =
     "w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-500";
 
@@ -309,7 +311,7 @@ function ExtendLock({ vault, onDone }: { vault: Address; onDone: () => void }) {
     <div className="flex items-center gap-2">
       <input
         className={inputCls}
-        placeholder="дней"
+        placeholder="days"
         inputMode="numeric"
         value={days}
         onChange={(e) => setDays(e.target.value.trim())}
@@ -319,13 +321,13 @@ function ExtendLock({ vault, onDone }: { vault: Address; onDone: () => void }) {
         pending={ext.isPending || extRcpt.isLoading}
         tone="violet"
       >
-        Продлить (+дней от now)
+        Extend (+days from now)
       </ActionBtn>
     </div>
   );
 }
 
-// ---- мелкие UI-примитивы ----
+// ---- small UI primitives ----
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-3">
@@ -353,7 +355,9 @@ const badgeTone: Record<string, string> = {
 
 function Badge({ tone, children }: { tone: string; children: React.ReactNode }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeTone[tone]}`}>
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeTone[tone]}`}
+    >
       {children}
     </span>
   );

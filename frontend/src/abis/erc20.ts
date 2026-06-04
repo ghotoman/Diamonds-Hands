@@ -1,4 +1,4 @@
-// Минимальный ERC-20 ABI для approve / allowance / метаданных.
+// Minimal ERC-20 ABI for approve / allowance / metadata.
 export const erc20Abi = [
   {
     type: "function",

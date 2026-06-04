@@ -15,11 +15,9 @@ export default function App() {
     <div className="mx-auto max-w-5xl px-4 py-8">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">
-            💎 Diamond Hands
-          </h1>
+          <h1 className="text-2xl font-bold text-slate-100">💎 Diamond Hands</h1>
           <p className="text-sm text-slate-400">
-            Залочь ERC-20 и победи бумажные руки · {TARGET_CHAIN.name}
+            Lock your ERC-20 and beat paper hands · {TARGET_CHAIN.name}
           </p>
         </div>
         <ConnectButton />
@@ -28,7 +26,7 @@ export default function App() {
       {!isConnected ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-10 text-center">
           <p className="text-lg text-slate-300">
-            Подключи кошелёк, чтобы создавать и управлять Vault'ами.
+            Connect your wallet to create and manage vaults.
           </p>
         </div>
       ) : (
