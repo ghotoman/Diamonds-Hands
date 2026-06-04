@@ -195,16 +195,35 @@ forge verify-contract "$FACTORY" src/DiamondHandsFactory.sol:DiamondHandsFactory
 
 ## 8. (Опционально) Смоук-тест на тестнете
 
-Создать реальный Vault на задеплоенной Factory:
+**8a. Тестовый ERC-20** (чтобы было что лочить):
 
 ```bash
-# понадобится тестовый ERC-20 + approve на FACTORY; затем:
+forge script script/DeployMockToken.s.sol:DeployMockToken \
+  --rpc-url base_sepolia --account dh-deployer --broadcast -vvv
+# → задеплоит "Diamond Test Token" (DHT) и намонетит 1,000,000 тебе.
+# Скопируй адрес токена из вывода (TOKEN).
+```
+
+**8b. Создать Vault** напрямую через cast (или просто через фронт):
+
+```bash
+TOKEN=0x...                       # из шага 8a
+AMOUNT=100000000000000000000      # 100 DHT (18 dec)
+UNLOCK=$(( $(date +%s) + 8*86400 ))   # now + 8 дней (≥ MIN_LOCK_DURATION)
+
+# approve фабрике, затем createVault (soft, 20%)
+cast send $TOKEN "approve(address,uint256)" $FACTORY $AMOUNT \
+  --rpc-url base_sepolia --account dh-deployer
 cast send $FACTORY \
   "createVault(address,uint256,uint256,bool,uint16)" \
-  <token> <amount> <unlockTimestamp> true 2000 \
+  $TOKEN $AMOUNT $UNLOCK true 2000 \
   --rpc-url base_sepolia --account dh-deployer
-# unlockTimestamp = сейчас + ≥7 дней (>= now+604800)
+
+cast call $FACTORY "vaultCount()(uint256)" --rpc-url base_sepolia   # → 1
 ```
+
+Либо просто открой фронт (`frontend/`), подключи кошелёк и создай Vault
+с адресом DHT — весь flow approve → create → manage в UI.
 
 ---
 
