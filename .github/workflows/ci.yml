@@ -31,7 +31,11 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          # nightly вместо stable: у stable-релиза v1.7.1 ломается
+          # пост-проверка аттестаций бинарников в foundryup
+          # ("no expected hash for forge"). nightly обходит этот путь;
+          # solc всё равно зафиксирован 0.8.24 в foundry.toml.
+          version: nightly
 
       - name: Forge version
         run: forge --version
