@@ -21,6 +21,28 @@ Notes accumulated while porting the design prototype to a production Vite app.
   (OnchainKitProvider + MiniKitProvider) and `web3/config.ts` (farcaster
   connector). No separate task-5 add needed.
 
+- **Real writes (Stage 4).** All actions use wagmi `useWriteContract` +
+  viem `waitForTransactionReceipt`, driving the same overlay as the demo
+  (wallet → pending → success | error) and refetching reads on success.
+  - **Approve targets (from the contracts):** `createVault` pulls the asset
+    via `safeTransferFrom(msg.sender → vault)`, so the user approves the
+    **Factory**; `topUp` pulls via `safeTransferFrom(msg.sender → vault clone)`,
+    so the user approves the **Vault**. Approval is for the **exact amount**
+    (a fresh approve each lock/top-up) — simpler and safer than max-approve.
+  - **extendLock** takes an absolute `newUnlockTimestamp` = current unlock +
+    chosen days (contract requires strictly-increasing, ≤ 5y from now).
+  - **Error copy:** `web3/tx.ts#parseTxError` maps user-rejection, gas, and
+    every Factory/Vault/ERC-20 custom error to friendly English text.
+  - **checkIn** is now a real signed tx (emits `CheckedIn`); routed through
+    the overlay like other actions.
+
+- **Live create token list.** The picker uses `KNOWN_TOKENS` (Base Sepolia
+  WETH + optional `DHT` via `VITE_TEST_TOKEN_ADDRESS`) with live wallet
+  balances (`web3/useTokens.ts`); demo mode keeps the 7 mock tokens. Minor
+  cosmetics in live mode: balances show `$0` (no price oracle), and the
+  "Approve + Lock" hint is static (the real flow skips approve when allowance
+  already covers the amount). Functional, not visual-critical.
+
 ## To verify before Mini App publish (task 5)
 
 - Fill `HOST` + `accountAssociation` in `public/.well-known/farcaster.json`

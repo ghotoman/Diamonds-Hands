@@ -22,6 +22,16 @@ if (testTokenAddr) {
   KNOWN[testTokenAddr] = { sym: "DHT", name: "Diamond Test Token", color: "#0000FF", decimals: 18 };
 }
 
+/// Known tokens as UI Token[] (no balance/price). Drives the create
+/// picker in live mode — real Base Sepolia assets the contracts accept.
+export const KNOWN_TOKENS: Token[] = Object.entries(KNOWN).map(([address, m]) => ({
+  address: address as Address,
+  sym: m.sym,
+  name: m.name,
+  color: m.color,
+  decimals: m.decimals,
+}));
+
 /// Deterministic pleasant color from an address.
 function colorFromAddress(addr: string): string {
   let h = 0;
