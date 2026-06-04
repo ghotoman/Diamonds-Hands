@@ -161,24 +161,27 @@ ETHERSCAN_API_KEY=...   # бесплатно на https://etherscan.io/myapikey
 Затем верифицируй уже задеплоенные контракты (Base Sepolia):
 
 ```bash
+# ВАЖНО: forge читает .env для своего конфига, но $ETHERSCAN_API_KEY
+# в командной строке раскрывает bash — поэтому подгрузим .env в шелл:
+set -a; source .env; set +a
+echo "${ETHERSCAN_API_KEY:0:6}..."   # должно быть непусто
+
 IMPL=0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e
 FACTORY=0x89de426deF37Aa34c17f72d6a73229E64dd93e11
 FEE=0x51eEE5409d3126505adF87F7EE5B96ae3e468e30
 
 # Vault — без аргументов конструктора
-forge verify-contract $IMPL src/DiamondHandsVault.sol:DiamondHandsVault \
+forge verify-contract "$IMPL" src/DiamondHandsVault.sol:DiamondHandsVault \
   --chain 84532 --watch \
-  --verifier etherscan \
   --verifier-url https://api.etherscan.io/v2/api \
-  --etherscan-api-key $ETHERSCAN_API_KEY
+  --etherscan-api-key "$ETHERSCAN_API_KEY"
 
 # Factory — конструктор (implementation, feeReceiver)
-forge verify-contract $FACTORY src/DiamondHandsFactory.sol:DiamondHandsFactory \
+forge verify-contract "$FACTORY" src/DiamondHandsFactory.sol:DiamondHandsFactory \
   --chain 84532 --watch \
-  --verifier etherscan \
   --verifier-url https://api.etherscan.io/v2/api \
-  --etherscan-api-key $ETHERSCAN_API_KEY \
-  --constructor-args $(cast abi-encode "constructor(address,address)" $IMPL $FEE)
+  --etherscan-api-key "$ETHERSCAN_API_KEY" \
+  --constructor-args $(cast abi-encode "constructor(address,address)" "$IMPL" "$FEE")
 ```
 
 > **Без ключа** можно верифицировать через Sourcify (keyless):
