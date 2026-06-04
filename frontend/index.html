@@ -22,12 +22,12 @@
     />
 
     <!--
-      Base App / Farcaster Mini App embed. Replace HOST with your deployed
-      domain to make the app launchable as a Mini App frame.
+      Base App / Farcaster Mini App embed. __APP_URL__ is filled at build time
+      from VITE_APP_URL (or the host's URL on Vercel / Netlify) — see vite.config.ts.
     -->
     <meta
       name="fc:miniapp"
-      content='{"version":"1","imageUrl":"https://HOST/og.png","button":{"title":"Open Diamond Hands","action":{"type":"launch_miniapp","name":"Diamond Hands","url":"https://HOST"}}}'
+      content='{"version":"1","imageUrl":"__APP_URL__/og.png","button":{"title":"Open Diamond Hands","action":{"type":"launch_miniapp","name":"Diamond Hands","url":"__APP_URL__"}}}'
     />
   </head>
   <body>

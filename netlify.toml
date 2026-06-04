@@ -1,0 +1,12 @@
+# Netlify build config for the Diamond Hands frontend (monorepo subdir).
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+# SPA fallback. Static files (incl. /.well-known/farcaster.json) are served
+# first; this only catches unknown paths so the app loads at any URL.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

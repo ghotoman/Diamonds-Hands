@@ -1,5 +1,5 @@
 {
-  "_comment": "Base App / Farcaster Mini App manifest. Fill HOST with your deployed domain and generate accountAssociation via the Base/Warpcast manifest tool before publishing.",
+  "_comment": "Base App / Farcaster Mini App manifest. __APP_URL__ is filled at build time from VITE_APP_URL (or the host URL on Vercel/Netlify). Generate accountAssociation via the Base/Warpcast manifest tool for the same domain before publishing.",
   "accountAssociation": {
     "header": "",
     "payload": "",
@@ -10,9 +10,9 @@
     "name": "Diamond Hands",
     "subtitle": "Beat paper hands",
     "description": "Lock your ERC-20 on-chain for a fixed term and beat paper hands. Soft mode with a decaying penalty, or hard lock.",
-    "iconUrl": "https://HOST/icon.png",
-    "homeUrl": "https://HOST",
-    "splashImageUrl": "https://HOST/splash.png",
+    "iconUrl": "__APP_URL__/icon.png",
+    "homeUrl": "__APP_URL__",
+    "splashImageUrl": "__APP_URL__/splash.png",
     "splashBackgroundColor": "#0b1120",
     "primaryCategory": "finance",
     "tags": ["defi", "base", "hodl", "lock", "erc20"]

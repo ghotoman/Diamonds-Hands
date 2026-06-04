@@ -67,20 +67,48 @@ needed — handy for previews/CI). `live` reads/writes the chain when a wallet i
 connected on Base Sepolia; it handles connect / wrong-network / loading
 (skeleton) / error / empty states.
 
+## Deploy
+
+The repo ships host configs that build this subdir automatically:
+
+- **Vercel** — import the repo, set **Root Directory = `frontend`** (picks up
+  `frontend/vercel.json`). Build/output are pre-set; the production domain is
+  auto-injected (see below).
+- **Netlify** — `netlify.toml` (repo root) sets `base = frontend`,
+  `publish = dist`, and an SPA fallback. Just connect the repo.
+
+Set the contract env vars (`VITE_FACTORY_ADDRESS`, `VITE_BASE_SEPOLIA_RPC_URL`,
+…) in the host dashboard. `dist/` is gitignored — the host builds it.
+
+### Mini App embed/manifest domain
+
+The Mini App embed meta (`index.html`) and `public/.well-known/farcaster.json`
+use an `__APP_URL__` token that `vite.config.ts` fills **at build time** from:
+
+`VITE_APP_URL` → Vercel (`VERCEL_PROJECT_PRODUCTION_URL` / `VERCEL_URL`) →
+Netlify (`URL` / `DEPLOY_PRIME_URL`).
+
+On Vercel/Netlify it's auto-detected; for other hosts set `VITE_APP_URL` to the
+canonical `https://…` origin. Placeholder icons live in `public/` — regenerate
+with `node scripts/gen-placeholder-icons.mjs`; replace with real art for launch.
+
 ## Base App (Mini App)
 
 `main.tsx` wraps the app in `OnchainKitProvider` + `MiniKitProvider`; `App.tsx`
-calls `setMiniAppReady()` to dismiss the host splash; `web3/config.ts` includes
-the Farcaster Mini App connector (auto-connects inside the Base App).
+calls `setMiniAppReady()` to dismiss the host splash and **auto-connects the
+Farcaster Mini App connector** when running inside the Base App (detected via
+`useMiniKit().context`). On standalone web it connects an injected extension,
+falling back to the Coinbase smart-wallet.
 
-To publish (needs a deployed HTTPS domain):
+To publish:
 
-1. Deploy `dist/` to a host; set the canonical domain.
-2. Replace every `HOST` placeholder in `index.html` (`fc:miniapp`) and
-   `public/.well-known/farcaster.json` with that domain; add `icon.png`,
-   `splash.png`, `og.png`.
-3. Generate `accountAssociation` with the Base/Warpcast manifest tool and paste
-   it into `farcaster.json`.
-4. Validate the embed in the Base App / Warpcast embed tools.
+1. Deploy (above) so the embed meta + manifest carry the real domain.
+2. Generate `accountAssociation` for that domain with the Base/Warpcast manifest
+   tool and paste it into `public/.well-known/farcaster.json`.
+3. Validate the embed in the Base App / Warpcast embed tools, then open it.
+
+> The Mini App wallet only exists **inside the Base App** loaded from the public
+> URL — it can't be tested in a plain browser on `localhost`. For local dev, use
+> a browser wallet extension on Base Sepolia, or the `◍ demo` toggle (no wallet).
 
 Open items and known gaps vs. the prototype are tracked in [`ISSUES.md`](./ISSUES.md).
