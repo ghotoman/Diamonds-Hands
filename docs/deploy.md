@@ -232,7 +232,8 @@ cast send $FACTORY \
 - Explorer:
   - https://sepolia.basescan.org/address/0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e
   - https://sepolia.basescan.org/address/0x89de426deF37Aa34c17f72d6a73229E64dd93e11
-- Верификация: ⏳ ожидает (см. шаг 7 — Etherscan V2)
+- Верификация: ✅ Sourcify (2026-06-04), оба контракта `Response: OK`.
+  BaseScan отображает исходники по Sourcify-матчу.
 
 ### Base Mainnet (chainId 8453)
 - НЕ ЗАДЕПЛОЕНО
