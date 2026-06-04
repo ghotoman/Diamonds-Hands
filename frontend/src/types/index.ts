@@ -35,4 +35,8 @@ export type Vault = {
   status: VaultStatus;
   /// current penalty percent (currentPenaltyBps ÷ 100)
   currentPenalty: number;
+  /// check-in streak (UI only — derived from CheckedIn events via an indexer;
+  /// optional until an indexer exists)
+  checkIns?: number;
+  lastCheckIn?: number;
 };

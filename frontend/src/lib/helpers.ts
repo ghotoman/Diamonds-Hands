@@ -22,6 +22,15 @@ export function isUnlocked(v: Vault, now: number): boolean {
   return now >= v.unlock;
 }
 
+/// Live penalty percent: startPenalty at lock, 0 at unlock (linear).
+/// Mirrors the contract's currentPenaltyBps; recomputed each tick so the UI
+/// stays live between on-chain reads. Hard mode / past unlock → 0.
+export function currentPenaltyPct(v: Vault, now: number): number {
+  if (v.mode !== "soft" || v.startPenalty === undefined) return 0;
+  const remainFrac = Math.max(0, (v.unlock - now) / (v.unlock - v.start));
+  return v.startPenalty * Math.min(1, remainFrac);
+}
+
 /// USD value if a price is known, else undefined.
 export function usd(v: Vault): number | undefined {
   return v.token.price === undefined ? undefined : v.token.price * v.amount;
