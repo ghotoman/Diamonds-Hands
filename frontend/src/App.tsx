@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAccount, useConnect, useSwitchChain } from "wagmi";
+import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import type { Address } from "viem";
 import type { Vault } from "./types";
 import { DAY, fmtNum, currentPenaltyPct, shortAddr } from "./lib/helpers";
@@ -141,11 +142,42 @@ function SwitchPrompt({ onSwitch, switching }: { onSwitch: () => void; switching
   );
 }
 
+function SkeletonCard() {
+  return (
+    <div className="rounded-2xl bg-white border border-line p-6">
+      <div className="flex items-center gap-3">
+        <div className="w-11 h-11 rounded-full bg-line" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 w-20 rounded bg-line" />
+          <div className="h-3 w-14 rounded bg-surface" />
+        </div>
+        <div className="h-6 w-16 rounded bg-line" />
+      </div>
+      <div className="mt-5 h-2 w-full rounded-full bg-line" />
+      <div className="mt-3 flex justify-between">
+        <div className="h-3 w-24 rounded bg-surface" />
+        <div className="h-3 w-16 rounded bg-surface" />
+      </div>
+    </div>
+  );
+}
+
 function LoadingState() {
   return (
-    <div className="px-6 pt-24 flex flex-col items-center text-center">
-      <Spinner size={40} />
-      <p className="mt-4 text-[14px] text-sub">Loading your vaults…</p>
+    <div className="pb-32 animate-pulse">
+      <div className="px-5 pt-4">
+        <div className="h-3 w-24 rounded bg-line" />
+        <div className="mt-2 h-10 w-44 rounded-lg bg-line" />
+        <div className="mt-3 flex gap-2">
+          <div className="h-7 w-24 rounded-full bg-surface" />
+          <div className="h-7 w-28 rounded-full bg-surface" />
+        </div>
+      </div>
+      <div className="mt-6 px-5 flex flex-col gap-4">
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
     </div>
   );
 }
@@ -172,6 +204,13 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
 
 export default function App() {
   const now = useTick(1000);
+
+  // Base App: signal the Mini App is ready so the host dismisses its splash.
+  // No-op outside the Base App.
+  const { setMiniAppReady, isMiniAppReady } = useMiniKit();
+  useEffect(() => {
+    if (!isMiniAppReady) setMiniAppReady();
+  }, [isMiniAppReady, setMiniAppReady]);
 
   // wallet / network
   const { address, isConnected, chainId } = useAccount();
