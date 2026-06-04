@@ -1,17 +1,128 @@
 @import "tailwindcss";
 
+/* Design tokens — ported 1:1 from the prototype's tailwind.config.
+   (Tailwind v4 @theme; visually identical to the v3 config tokens.) */
 @theme {
-  --color-diamond: #38bdf8;
+  --color-baseblue: #0000ff;
+  --color-ink: #0a0b0d;
+  --color-sub: #5b616e;
+  --color-line: #ebecf0;
+  --color-surface: #f9fafb;
+  --color-success: #00b341;
+  --color-danger: #e11d48;
+  --color-warning: #f59e0b;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+
+  --shadow-cta: 0 1px 3px rgba(0, 0, 0, 0.08), 0 6px 16px rgba(0, 0, 255, 0.12);
+  --shadow-modal: 0 -8px 40px rgba(0, 0, 0, 0.12);
 }
 
-:root {
-  color-scheme: dark;
+* {
+  -webkit-tap-highlight-color: transparent;
 }
-
+html,
 body {
   margin: 0;
-  background: #0b1120;
-  color: #e2e8f0;
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  height: 100%;
+}
+body {
+  font-family: "Inter", system-ui, sans-serif;
+  background: #dce0e6;
+  color: #0a0b0d;
+  -webkit-font-smoothing: antialiased;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* phone frame — Base App on a handset (kept as an optional dev shell) */
+.dh-phone {
+  position: relative;
+  width: 390px;
+  max-width: 100%;
+  height: min(844px, calc(100vh - 40px));
+  background: #fff;
+  border-radius: 40px;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    0 24px 64px rgba(15, 20, 40, 0.28);
+  border: 1px solid #ebecf0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.dh-surface::-webkit-scrollbar {
+  width: 0;
+}
+.dh-surface {
+  scrollbar-width: none;
+}
+
+/* range slider — Base blue */
+.dh-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  outline: none;
+  background: linear-gradient(
+    to right,
+    #0000ff var(--p, 50%),
+    #ebecf0 var(--p, 50%)
+  );
+}
+.dh-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #0000ff;
+  box-shadow: 0 1px 4px rgba(0, 0, 255, 0.25);
+  cursor: pointer;
+}
+.dh-range::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #0000ff;
+  cursor: pointer;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.4;
 }

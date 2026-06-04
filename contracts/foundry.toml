@@ -18,6 +18,13 @@ fs_permissions = [{ access = "read-write", path = "./" }]
 [profile.default.fuzz]
 runs = 256
 
+# Don't run the Solidity linter during `forge build`. The nightly forge
+# linter (used in CI) panics on our code (reentrancy-events lint, a known
+# upstream bug). Lint warnings (e.g. block.timestamp) are noise here anyway;
+# CI quality is covered by forge fmt + tests + invariants + the security review.
+[lint]
+lint_on_build = false
+
 [profile.ci]
 fuzz = { runs = 1000 }
 verbosity = 4
