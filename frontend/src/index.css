@@ -53,6 +53,26 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* respect device safe zones when running full-bleed (real handset / Base App) */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* On a real handset / embedded in the Base App, fill the viewport and drop
+   the dev-shell chrome. The framed look is kept for wider (desktop) screens. */
+@media (max-width: 480px) {
+  body {
+    padding: 0;
+  }
+  .dh-phone {
+    width: 100%;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
 }
 .dh-surface::-webkit-scrollbar {
   width: 0;
