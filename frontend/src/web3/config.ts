@@ -6,7 +6,8 @@ import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 const rpcUrl = import.meta.env.VITE_BASE_SEPOLIA_RPC_URL;
 
 /// wagmi config: Base Sepolia only.
-/// - farcasterMiniApp: auto-connected by MiniKit inside the Base App.
+/// - farcasterMiniApp: the Base App / Farcaster Mini App wallet. App.tsx
+///   auto-connects it when running inside a Mini App (see useMiniKit context).
 /// - injected / coinbaseWallet: standalone web fallback.
 export const config = createConfig({
   chains: [baseSepolia],
@@ -20,8 +21,8 @@ export const config = createConfig({
   },
 });
 
-/// Connector id of the Farcaster Mini App connector — hidden from the
-/// manual connect list (it auto-connects inside the Base App).
+/// Connector id of the Farcaster Mini App connector. Used both to auto-connect
+/// inside the Base App and as the manual-connect target there.
 export const FARCASTER_CONNECTOR_ID = "farcaster";
 
 declare module "wagmi" {
