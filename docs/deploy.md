@@ -73,7 +73,8 @@ cp .env.example .env
 Заполни в `.env`:
 
 - `FEE_RECEIVER=0x...` — куда идут penalty (можно = адрес deployer'а).
-- `BASESCAN_API_KEY=...` — опционально, для `--verify` (бесплатно на basescan.org).
+- `ETHERSCAN_API_KEY=...` — опционально, для `--verify` (Etherscan V2,
+  бесплатно на etherscan.io; один ключ на все сети, вкл. Base).
 - `BASE_SEPOLIA_RPC_URL=...` — опционально (есть публичный дефолт).
 
 ⚠️ Приватный ключ в `.env` НЕ нужен — подписант идёт через `--account`.
@@ -146,28 +147,50 @@ cast call $IMPL "initialize(address,address,uint256,uint256,bool,address,uint16)
 
 ---
 
-## 7. Верификация на BaseScan
+## 7. Верификация (Etherscan V2)
 
-**7a.** Если деплоил с `--verify`, она уже прошла — проверь страницы
-контрактов на https://sepolia.basescan.org.
-
-**7b. Ручная верификация (если `--verify` пропускали/падала):**
+⚠️ Etherscan отключил V1 per-chain эндпоинты (`api-sepolia.basescan.org`).
+Нужен **ключ Etherscan** (etherscan.io — один ключ на все сети, включая
+Base) и V2-эндпоинт. `foundry.toml` уже настроен на V2 и читает
+`ETHERSCAN_API_KEY`. Добавь его в `.env`:
 
 ```bash
-# Vault: без аргументов конструктора
-forge verify-contract $IMPL src/DiamondHandsVault.sol:DiamondHandsVault \
-  --chain base-sepolia --watch
-
-# Factory: два аргумента конструктора (implementation, feeReceiver)
-forge verify-contract $FACTORY src/DiamondHandsFactory.sol:DiamondHandsFactory \
-  --chain base-sepolia --watch \
-  --constructor-args $(cast abi-encode "constructor(address,address)" $IMPL <FEE_RECEIVER>)
+ETHERSCAN_API_KEY=...   # бесплатно на https://etherscan.io/myapikey
 ```
 
-> Если BaseScan-эндпоинт ругается на устаревший API: Etherscan перешёл
-> на единый V2 (`--verifier-url https://api.etherscan.io/v2/api` +
-> `--chain 84532` + ключ Etherscan). Это known-issue инфраструктуры,
-> на сами контракты не влияет.
+Затем верифицируй уже задеплоенные контракты (Base Sepolia):
+
+```bash
+IMPL=0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e
+FACTORY=0x89de426deF37Aa34c17f72d6a73229E64dd93e11
+FEE=0x51eEE5409d3126505adF87F7EE5B96ae3e468e30
+
+# Vault — без аргументов конструктора
+forge verify-contract $IMPL src/DiamondHandsVault.sol:DiamondHandsVault \
+  --chain 84532 --watch \
+  --verifier etherscan \
+  --verifier-url https://api.etherscan.io/v2/api \
+  --etherscan-api-key $ETHERSCAN_API_KEY
+
+# Factory — конструктор (implementation, feeReceiver)
+forge verify-contract $FACTORY src/DiamondHandsFactory.sol:DiamondHandsFactory \
+  --chain 84532 --watch \
+  --verifier etherscan \
+  --verifier-url https://api.etherscan.io/v2/api \
+  --etherscan-api-key $ETHERSCAN_API_KEY \
+  --constructor-args $(cast abi-encode "constructor(address,address)" $IMPL $FEE)
+```
+
+> **Без ключа** можно верифицировать через Sourcify (keyless):
+> ```bash
+> forge verify-contract $IMPL src/DiamondHandsVault.sol:DiamondHandsVault \
+>   --chain 84532 --verifier sourcify
+> forge verify-contract $FACTORY src/DiamondHandsFactory.sol:DiamondHandsFactory \
+>   --chain 84532 --verifier sourcify \
+>   --constructor-args $(cast abi-encode "constructor(address,address)" $IMPL $FEE)
+> ```
+> BaseScan подтягивает Sourcify-матчи, но Etherscan V2 даёт «зелёную
+> галочку» прямо на странице обозревателя.
 
 ---
 
@@ -199,14 +222,18 @@ cast send $FACTORY \
 
 ## Адреса деплоя
 
-### Base Sepolia (chainId 84532)
-- DiamondHandsVault implementation: НЕ ЗАДЕПЛОЕНО
-- DiamondHandsFactory: НЕ ЗАДЕПЛОЕНО
-- Fee receiver: НЕ ЗАДЕПЛОЕНО
-- Deployer (Factory owner): НЕ ЗАДЕПЛОЕНО
-- Block: -
-- Tx hash impl: -
-- Tx hash factory: -
+### Base Sepolia (chainId 84532) — задеплоено 2026-06-04
+- DiamondHandsVault implementation: `0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e`
+- DiamondHandsFactory: `0x89de426deF37Aa34c17f72d6a73229E64dd93e11`
+- Fee receiver: `0x51eEE5409d3126505adF87F7EE5B96ae3e468e30`
+- Deployer (Factory owner): `0x51eEE5409d3126505adF87F7EE5B96ae3e468e30`
+- Block: 42396935
+- Tx hash impl: `0x0744e39c67a4e3dacccfa325dc419c6944354888ec461e54302f2eaf7c2a3745`
+- Tx hash factory: `0xee2f2b8dae837e0f84702204d9e72c877cae36083cbb3aecf1451258d7aa1ce4`
+- Explorer:
+  - https://sepolia.basescan.org/address/0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e
+  - https://sepolia.basescan.org/address/0x89de426deF37Aa34c17f72d6a73229E64dd93e11
+- Верификация: ⏳ ожидает (см. шаг 7 — Etherscan V2)
 
 ### Base Mainnet (chainId 8453)
 - НЕ ЗАДЕПЛОЕНО

@@ -26,6 +26,9 @@ verbosity = 4
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
 base_mainnet = "${BASE_MAINNET_RPC_URL}"
 
+# Etherscan V2 — единый мультичейн-эндпоинт (V1 per-chain URL'ы отключены
+# с 2025). Один ключ Etherscan (etherscan.io) работает на всех сетях,
+# включая Base; сеть выбирается параметром chain.
 [etherscan]
-base_sepolia = { key = "${BASESCAN_API_KEY}", url = "https://api-sepolia.basescan.org/api", chain = 84532 }
-base_mainnet = { key = "${BASESCAN_API_KEY}", url = "https://api.basescan.org/api", chain = 8453 }
+base_sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api.etherscan.io/v2/api", chain = 84532 }
+base_mainnet = { key = "${ETHERSCAN_API_KEY}", url = "https://api.etherscan.io/v2/api", chain = 8453 }
