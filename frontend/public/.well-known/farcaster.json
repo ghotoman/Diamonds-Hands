@@ -1,0 +1,20 @@
+{
+  "_comment": "Base App / Farcaster Mini App manifest. Fill HOST with your deployed domain and generate accountAssociation via the Base/Warpcast manifest tool before publishing.",
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "Diamond Hands",
+    "subtitle": "Beat paper hands",
+    "description": "Lock your ERC-20 on-chain for a fixed term and beat paper hands. Soft mode with a decaying penalty, or hard lock.",
+    "iconUrl": "https://HOST/icon.png",
+    "homeUrl": "https://HOST",
+    "splashImageUrl": "https://HOST/splash.png",
+    "splashBackgroundColor": "#0b1120",
+    "primaryCategory": "finance",
+    "tags": ["defi", "base", "hodl", "lock", "erc20"]
+  }
+}

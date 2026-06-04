@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Diamond Hands</title>
+    <meta name="description" content="Lock your ERC-20 on-chain and beat paper hands." />
+
+    <!--
+      Base App / Farcaster Mini App embed. Replace HOST with your deployed
+      domain so the app is launchable as a Mini App frame. The image is the
+      3:2 launch card; the button opens homeUrl from the manifest.
+    -->
+    <meta
+      name="fc:miniapp"
+      content='{"version":"1","imageUrl":"https://HOST/og.png","button":{"title":"Open Diamond Hands","action":{"type":"launch_miniapp","name":"Diamond Hands","url":"https://HOST"}}}'
+    />
   </head>
   <body>
     <div id="root"></div>

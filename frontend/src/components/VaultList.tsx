@@ -8,7 +8,7 @@ import { VaultCard } from "./VaultCard";
 
 export type VaultListHandle = { refetch: () => void };
 
-/// Список Vault'ов текущего пользователя (через Factory.getVaultsByOwner).
+/// List of the current user's vaults (via Factory.getVaultsByOwner).
 export const VaultList = forwardRef<VaultListHandle>((_props, ref) => {
   const { address } = useAccount();
 
@@ -29,14 +29,14 @@ export const VaultList = forwardRef<VaultListHandle>((_props, ref) => {
   return (
     <div>
       <h2 className="mb-3 text-lg font-semibold text-slate-100">
-        Мои Vault'ы {vaults.length > 0 && `(${vaults.length})`}
+        My vaults {vaults.length > 0 && `(${vaults.length})`}
       </h2>
 
-      {isLoading && <p className="text-slate-400">Загрузка…</p>}
+      {isLoading && <p className="text-slate-400">Loading…</p>}
 
       {!isLoading && vaults.length === 0 && (
         <p className="rounded-2xl border border-dashed border-slate-700 p-6 text-center text-slate-400">
-          Пока нет Vault'ов. Создай первый слева 💎
+          No vaults yet. Create your first one on the left 💎
         </p>
       )}
 

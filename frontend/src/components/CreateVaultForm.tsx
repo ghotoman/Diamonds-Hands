@@ -66,7 +66,7 @@ export function CreateVaultForm({ onCreated }: { onCreated: () => void }) {
   const approve = useWriteContract();
   const approveRcpt = useWaitForTransactionReceipt({ hash: approve.data });
   if (approveRcpt.isSuccess && allowance !== undefined && needsApprove) {
-    // подтянуть свежий allowance после подтверждения
+    // refresh allowance after confirmation
     void refetchAllowance();
   }
 
@@ -78,8 +78,10 @@ export function CreateVaultForm({ onCreated }: { onCreated: () => void }) {
   }
 
   const lockValid = lockDays >= 7 && lockDays <= 1825;
-  const penaltyValid = !soft || (penaltyBps >= MIN_USER_PENALTY_BPS && penaltyBps <= ABS_MAX_PENALTY_BPS);
-  const formValid = tokenValid && !!amountWei && amountWei > 0n && lockValid && penaltyValid;
+  const penaltyValid =
+    !soft || (penaltyBps >= MIN_USER_PENALTY_BPS && penaltyBps <= ABS_MAX_PENALTY_BPS);
+  const formValid =
+    tokenValid && !!amountWei && amountWei > 0n && lockValid && penaltyValid;
 
   function doApprove() {
     if (!tokenAddr || amountWei === undefined) return;
@@ -107,12 +109,12 @@ export function CreateVaultForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-      <h2 className="mb-4 text-lg font-semibold text-slate-100">Создать Vault</h2>
+      <h2 className="mb-4 text-lg font-semibold text-slate-100">Create a Vault</h2>
 
       <div className="space-y-3">
         <label className="block">
           <span className="mb-1 block text-sm text-slate-400">
-            ERC-20 токен (адрес)
+            ERC-20 token (address)
           </span>
           <input
             className={input}
@@ -121,17 +123,17 @@ export function CreateVaultForm({ onCreated }: { onCreated: () => void }) {
             onChange={(e) => setToken(e.target.value.trim())}
           />
           {token && !tokenValid && (
-            <span className="text-xs text-rose-400">Невалидный адрес</span>
+            <span className="text-xs text-rose-400">Invalid address</span>
           )}
           {symbol && (
             <span className="text-xs text-slate-500">
-              Токен: {symbol} ({dec} dec)
+              Token: {symbol} ({dec} dec)
             </span>
           )}
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-sm text-slate-400">Сумма</span>
+          <span className="mb-1 block text-sm text-slate-400">Amount</span>
           <input
             className={input}
             placeholder="100"
@@ -143,7 +145,7 @@ export function CreateVaultForm({ onCreated }: { onCreated: () => void }) {
 
         <label className="block">
           <span className="mb-1 block text-sm text-slate-400">
-            Срок лока: {lockDays} дн.
+            Lock duration: {lockDays} days
           </span>
           <input
             type="range"
@@ -153,7 +155,7 @@ export function CreateVaultForm({ onCreated }: { onCreated: () => void }) {
             onChange={(e) => setLockDays(Number(e.target.value))}
             className="w-full accent-sky-500"
           />
-          <span className="text-xs text-slate-500">от 7 дней до 5 лет</span>
+          <span className="text-xs text-slate-500">from 7 days to 5 years</span>
         </label>
 
         <div className="flex gap-2">
@@ -163,7 +165,7 @@ export function CreateVaultForm({ onCreated }: { onCreated: () => void }) {
               soft ? "bg-sky-500 text-slate-900" : "bg-slate-800 text-slate-300"
             }`}
           >
-            Soft (со штрафом)
+            Soft (with penalty)
           </button>
           <button
             onClick={() => setSoft(false)}
@@ -171,14 +173,14 @@ export function CreateVaultForm({ onCreated }: { onCreated: () => void }) {
               !soft ? "bg-sky-500 text-slate-900" : "bg-slate-800 text-slate-300"
             }`}
           >
-            Hard (без выхода)
+            Hard (no early exit)
           </button>
         </div>
 
         {soft && (
           <div>
             <span className="mb-1 block text-sm text-slate-400">
-              Жёсткость штрафа (старт)
+              Penalty hardness (start)
             </span>
             <div className="flex gap-2">
               {PENALTY_PRESETS.map((p) => (
@@ -205,8 +207,8 @@ export function CreateVaultForm({ onCreated }: { onCreated: () => void }) {
             className="w-full rounded-lg bg-emerald-500 px-4 py-2.5 font-semibold text-slate-900 hover:bg-emerald-400 disabled:opacity-50"
           >
             {approve.isPending || approveRcpt.isLoading
-              ? "Approve…"
-              : `Approve ${symbol ?? "токен"}`}
+              ? "Approving…"
+              : `Approve ${symbol ?? "token"}`}
           </button>
         ) : (
           <button
@@ -214,9 +216,7 @@ export function CreateVaultForm({ onCreated }: { onCreated: () => void }) {
             disabled={!formValid || create.isPending || createRcpt.isLoading}
             className="w-full rounded-lg bg-sky-500 px-4 py-2.5 font-semibold text-slate-900 hover:bg-sky-400 disabled:opacity-50"
           >
-            {create.isPending || createRcpt.isLoading
-              ? "Создание…"
-              : "Создать Vault"}
+            {create.isPending || createRcpt.isLoading ? "Creating…" : "Create Vault"}
           </button>
         )}
 
