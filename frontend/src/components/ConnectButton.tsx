@@ -1,5 +1,6 @@
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { TARGET_CHAIN } from "../lib/addresses";
+import { FARCASTER_CONNECTOR_ID } from "../wagmi";
 import { shortAddr } from "../lib/format";
 
 /// Wallet connect button + network gate (Base Sepolia).
@@ -10,9 +11,12 @@ export function ConnectButton() {
   const { switchChain } = useSwitchChain();
 
   if (!isConnected) {
+    // Hide the Farcaster connector from the manual list: inside the Base App
+    // MiniKit auto-connects it; standalone web uses injected / Coinbase.
+    const manual = connectors.filter((c) => c.id !== FARCASTER_CONNECTOR_ID);
     return (
       <div className="flex flex-wrap gap-2">
-        {connectors.map((c) => (
+        {manual.map((c) => (
           <button
             key={c.uid}
             onClick={() => connect({ connector: c })}

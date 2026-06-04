@@ -1,5 +1,6 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useAccount } from "wagmi";
+import { useMiniKit } from "@coinbase/onchainkit/minikit";
 
 import { ConnectButton } from "./components/ConnectButton";
 import { CreateVaultForm } from "./components/CreateVaultForm";
@@ -11,6 +12,15 @@ export default function App() {
   const { isConnected } = useAccount();
   const listRef = useRef<VaultListHandle>(null);
 
+  // MiniKit: signal the Base App that the mini app is ready (hides splash).
+  // No-op outside a Base App / Farcaster Mini App context.
+  const { setMiniAppReady, isMiniAppReady, context } = useMiniKit();
+  useEffect(() => {
+    if (!isMiniAppReady) void setMiniAppReady();
+  }, [isMiniAppReady, setMiniAppReady]);
+
+  const inMiniApp = !!context;
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
@@ -18,6 +28,11 @@ export default function App() {
           <h1 className="text-2xl font-bold text-slate-100">💎 Diamond Hands</h1>
           <p className="text-sm text-slate-400">
             Lock your ERC-20 and beat paper hands · {TARGET_CHAIN.name}
+            {inMiniApp && (
+              <span className="ml-2 rounded-full bg-violet-500/20 px-2 py-0.5 text-xs text-violet-300">
+                Base App
+              </span>
+            )}
           </p>
         </div>
         <ConnectButton />
