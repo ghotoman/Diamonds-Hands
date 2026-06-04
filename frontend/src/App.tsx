@@ -4,10 +4,13 @@ import type { Address } from "viem";
 import type { Vault } from "./types";
 import { DAY, fmtNum, currentPenaltyPct, shortAddr } from "./lib/helpers";
 import { useTick } from "./lib/useTick";
-import { MOCK_VAULTS } from "./lib/mock";
-import { CHAIN_ID } from "./web3/contracts";
+import { MOCK_VAULTS, MOCK_TOKENS } from "./lib/mock";
+import { CHAIN_ID, explorerTx } from "./web3/contracts";
 import { FARCASTER_CONNECTOR_ID } from "./web3/config";
 import { useVaults } from "./web3/useVaults";
+import { useTokens } from "./web3/useTokens";
+import { useVaultActions } from "./web3/useVaultActions";
+import type { TxState } from "./web3/tx";
 import { Icon } from "./components/Icon";
 import { Logo } from "./components/Logo";
 import { Button } from "./components/Button";
@@ -17,18 +20,6 @@ import { CreateFlow, type CreateForm } from "./screens/CreateFlow";
 import { VaultDetail, EmergencyModal, ActionSheet, type ActionKind } from "./screens/VaultDetail";
 
 // ── Transaction overlay: wallet → pending → success | error ──
-type TxStage = "wallet" | "pending" | "success" | "error";
-type TxState = {
-  stage: TxStage;
-  title: string;
-  sub?: string;
-  hash?: string;
-  error?: string;
-  errorKind?: "rejected" | "gas" | "approve" | "generic";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _cfg?: any;
-} | null;
-
 function TxOverlay({ tx, onClose, onRetry }: { tx: TxState; onClose: () => void; onRetry: () => void }) {
   if (!tx) return null;
   const { stage, title, sub, hash, error, errorKind } = tx;
@@ -49,7 +40,7 @@ function TxOverlay({ tx, onClose, onRetry }: { tx: TxState; onClose: () => void;
             {stage === "pending" && (
               <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-[12px] text-sub">
                 <span className="w-1.5 h-1.5 rounded-full bg-baseblue animate-pulse" />
-                tx {hash} · Base
+                tx {shortAddr(hash)} · Base
               </div>
             )}
           </>
@@ -63,8 +54,13 @@ function TxOverlay({ tx, onClose, onRetry }: { tx: TxState; onClose: () => void;
             </div>
             <h2 className="text-[20px] font-bold text-ink">{title}</h2>
             <p className="mt-1.5 text-[14px] text-sub">{sub}</p>
-            <a href="#" onClick={(e) => e.preventDefault()} className="mt-3 inline-flex items-center gap-1.5 text-[14px] font-semibold text-baseblue">
-              {hash} on BaseScan
+            <a
+              href={hash ? explorerTx(hash) : "#"}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex items-center gap-1.5 text-[14px] font-semibold text-baseblue"
+            >
+              {shortAddr(hash)} on BaseScan
               <Icon name="external" size={15} />
             </a>
             <Button className="w-full mt-6" onClick={onClose}>
@@ -186,6 +182,7 @@ export default function App() {
   // data source: live on-chain reads, or the mock prototype (demo toggle)
   const [demo, setDemo] = useState(false); // prototype only
   const live = useVaults(!demo && isConnected && !wrongNetwork ? address : undefined);
+  const liveTokens = useTokens(!demo && isConnected && !wrongNetwork ? address : undefined);
   const [mock, setMock] = useState<Vault[]>(MOCK_VAULTS); // demo data + mock writes
 
   const [screen, setScreen] = useState<"dashboard" | "create" | "vault">("dashboard");
@@ -197,6 +194,7 @@ export default function App() {
     v: null,
   });
   const [tx, setTx] = useState<TxState>(null);
+  const actions = useVaultActions(setTx, live.refetch);
 
   const source = demo ? mock : live.vaults;
   const activeVault = source.find((v) => v.address === activeId);
@@ -218,16 +216,29 @@ export default function App() {
     if (pick) connect({ connector: pick });
   };
 
-  // mock async tx runner — shaped like a future viem writeContract flow.
-  // prototype only: replaced by real wagmi/viem writes in Stage 4.
+  // mock async tx runner — drives the same overlay as the live flow.
+  // DEMO MODE ONLY: live mode uses useVaultActions (real writeContract).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runTx = (cfg: any) => {
     const { steps, fail, onDone } = cfg;
     let i = 0;
-    const hash = "0x" + Math.random().toString(16).slice(2, 6) + "…" + Math.random().toString(16).slice(2, 6);
+    const hash = "0x" + Array.from({ length: 64 }, () => ((Math.random() * 16) | 0).toString(16)).join("");
     const step = () => {
       if (fail && i === (fail.at ?? steps.length - 1)) {
-        setTimeout(() => setTx({ stage: "error", ...failMsg(fail.kind), errorKind: fail.kind, _cfg: cfg }), 900);
+        setTimeout(
+          () =>
+            setTx({
+              stage: "error",
+              ...failMsg(fail.kind),
+              errorKind: fail.kind,
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              _retry: () => {
+                const { fail: _f, ...rest } = cfg;
+                runTx(rest);
+              },
+            }),
+          900,
+        );
         return;
       }
       if (i >= steps.length) {
@@ -261,14 +272,13 @@ export default function App() {
       },
     })[kind] || { title: "Something went wrong", error: "The transaction failed. Try again." };
 
-  // after a (mock) tx settles, refresh the live reads so on-chain truth wins.
-  const afterTx = () => {
-    if (!demo) live.refetch();
-  };
-
-  // ── action dispatch ──
+  // ── action dispatch (demo = mock runner; live = real writes) ──
   const onCreateSubmit = (form: CreateForm) => {
     setScreen("dashboard");
+    if (!demo) {
+      actions.createVault(form);
+      return;
+    }
     const steps: Array<{ title: string; sub: string }> = [];
     if (form.needsApprove)
       steps.push({ title: `Approve access to ${form.token.sym}`, sub: "Confirm the approve in your wallet" });
@@ -291,7 +301,6 @@ export default function App() {
           lastCheckIn: 0,
         };
         setMock((vs) => [fresh, ...vs]);
-        afterTx();
       },
     });
   };
@@ -306,19 +315,25 @@ export default function App() {
       return;
     }
     if (kind === "checkin") {
+      if (!demo) {
+        actions.checkIn(v);
+        return;
+      }
       setMock((vs) =>
         vs.map((x) => (x.address === v.address ? { ...x, checkIns: (x.checkIns ?? 0) + 1, lastCheckIn: Date.now() } : x)),
       );
-      afterTx();
       return;
     }
     if (kind === "withdraw") {
+      if (!demo) {
+        actions.withdraw(v).then((ok) => ok && setScreen("dashboard"));
+        return;
+      }
       runTx({
         steps: [{ title: "Confirm withdrawal", sub: "Sign the withdrawal in your wallet" }],
         success: { title: "Withdrawn ✓", sub: `${fmtNum(v.amount)} ${v.token.sym} in your wallet` },
         onDone: () => {
           setMock((vs) => vs.map((x) => (x.address === v.address ? { ...x, status: "withdrawn" } : x)));
-          afterTx();
           setScreen("dashboard");
         },
       });
@@ -327,6 +342,11 @@ export default function App() {
 
   const confirmSheet = (kind: "topup" | "extend", v: Vault, num: number) => {
     setSheet({ open: false, kind: null, v: null });
+    if (!demo) {
+      if (kind === "topup") actions.topUp(v, num);
+      else actions.extendLock(v, num);
+      return;
+    }
     runTx({
       steps: [{ title: kind === "topup" ? "Confirm top-up" : "Confirm extension", sub: "Sign in your wallet" }],
       success:
@@ -343,13 +363,16 @@ export default function App() {
               : x,
           ),
         );
-        afterTx();
       },
     });
   };
 
   const confirmEmergency = (v: Vault) => {
     setEmergency(null);
+    if (!demo) {
+      actions.emergencyWithdraw(v).then((ok) => ok && setScreen("dashboard"));
+      return;
+    }
     const pen = currentPenaltyPct(v, now);
     const receive = v.amount * (1 - pen / 100);
     runTx({
@@ -357,20 +380,15 @@ export default function App() {
       success: { title: "Exit done", sub: `Received ${fmtNum(receive)} ${v.token.sym} (penalty ${pen.toFixed(1)}%)` },
       onDone: () => {
         setMock((vs) => vs.map((x) => (x.address === v.address ? { ...x, status: "withdrawn" } : x)));
-        afterTx();
         setScreen("dashboard");
       },
     });
   };
 
   const retry = () => {
-    const cfg = tx?._cfg;
+    const r = tx?._retry;
     setTx(null);
-    if (cfg) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { fail, ...rest } = cfg;
-      runTx(rest);
-    }
+    r?.();
   };
 
   return (
@@ -445,7 +463,13 @@ export default function App() {
           ) : (
             <Dashboard vaults={live.vaults} now={now} onOpen={openVault} onCreate={() => setScreen("create")} />
           ))}
-        {screen === "create" && <CreateFlow onCancel={() => setScreen("dashboard")} onSubmit={onCreateSubmit} />}
+        {screen === "create" && (
+          <CreateFlow
+            onCancel={() => setScreen("dashboard")}
+            onSubmit={onCreateSubmit}
+            tokens={demo ? MOCK_TOKENS : liveTokens}
+          />
+        )}
         {screen === "vault" && activeVault && (
           <VaultDetail v={activeVault} now={now} onBack={() => setScreen("dashboard")} onAction={onVaultAction} />
         )}

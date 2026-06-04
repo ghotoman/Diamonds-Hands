@@ -23,9 +23,11 @@ const TITLES = ["", "Pick a token", "How much to lock", "For how long", "Lock mo
 export function CreateFlow({
   onCancel,
   onSubmit,
+  tokens = MOCK_TOKENS,
 }: {
   onCancel: () => void;
   onSubmit: (f: CreateForm) => void;
+  tokens?: Token[];
 }) {
   const [step, setStep] = useState(1);
   const [token, setToken] = useState<Token | null>(null);
@@ -86,7 +88,7 @@ export function CreateFlow({
 
       {/* body */}
       <div className="flex-1 overflow-y-auto px-5 pb-4">
-        {step === 1 && <StepToken token={token} setToken={setToken} query={query} setQuery={setQuery} />}
+        {step === 1 && <StepToken token={token} setToken={setToken} query={query} setQuery={setQuery} tokens={tokens} />}
         {step === 2 && t && <StepAmount t={t} amount={amount} setAmount={setAmount} amt={amt} over={overBalance} needsApprove={needsApprove} />}
         {step === 3 && <StepTerm days={days} setDays={setDays} customDate={customDate} setCustomDate={setCustomDate} />}
         {step === 4 && <StepMode mode={mode} setMode={setMode} penalty={penalty} setPenalty={setPenalty} />}
@@ -110,13 +112,15 @@ function StepToken({
   setToken,
   query,
   setQuery,
+  tokens,
 }: {
   token: Token | null;
   setToken: (t: Token) => void;
   query: string;
   setQuery: (q: string) => void;
+  tokens: Token[];
 }) {
-  const list = MOCK_TOKENS.filter((t) => (t.sym + t.name).toLowerCase().includes(query.toLowerCase()));
+  const list = tokens.filter((t) => (t.sym + t.name).toLowerCase().includes(query.toLowerCase()));
   return (
     <div>
       <div className="flex items-center gap-2 rounded-xl bg-surface border border-line px-3 h-12 mb-3">
