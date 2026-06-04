@@ -1,0 +1,48 @@
+# Frontend — open items / decisions
+
+Notes accumulated while porting the design prototype to a production Vite app.
+
+## Decisions
+
+- **Copy language: English.** The prototype copy is Russian, but the project
+  owner asked for an English-only frontend. The visual layout, colors,
+  spacing, and structure are ported 1:1; only the text strings are translated
+  to English. (Visual fidelity preserved; language per owner request.)
+
+- **Tailwind v4 instead of a v3 `tailwind.config.js`.** The existing project
+  is on Tailwind v4 (`@tailwindcss/vite`). The prototype's config tokens
+  (colors `baseblue/ink/sub/line/surface/success/danger/warning`, Inter font,
+  `shadow-cta` / `shadow-modal`) are ported verbatim into `@theme` in
+  `src/index.css`. `h-13` (3.25rem) already resolves natively in v4's spacing
+  scale, so no custom spacing token is needed. Output is visually identical.
+
+- **Base App SDK is present.** `@coinbase/onchainkit` (incl. MiniKit) and
+  `@farcaster/miniapp-wagmi-connector` are installed and wired in `main.tsx`
+  (OnchainKitProvider + MiniKitProvider) and `web3/config.ts` (farcaster
+  connector). No separate task-5 add needed.
+
+## To verify before Mini App publish (task 5)
+
+- Fill `HOST` + `accountAssociation` in `public/.well-known/farcaster.json`
+  and the `fc:miniapp` meta in `index.html` (needs a deployed domain + signed
+  association from the Base/Warpcast manifest tool).
+- Add the Base Dev dashboard verification meta tag (placeholder TODO).
+
+## Known gaps vs prototype (need contract/indexer support)
+
+- **Check-in streak count.** The prototype shows "N check-ins in a row" +
+  last-check-in state. On-chain `checkIn()` only emits a `CheckedIn` event;
+  the contract does not store a counter. The streak therefore needs an
+  off-chain indexer (events). For V1 the check-in **button/action** is wired,
+  but the streak count/"checked today" state requires event indexing — shown
+  as a simplified state until an indexer exists.
+
+- **USD valuation.** No on-chain price oracle in V1. `token.price` is optional;
+  USD figures are shown only when a price is available (otherwise hidden /
+  "—"), rather than faking a value.
+
+- **Token registry.** Prototype hardcodes a token list (sym/name/color/price).
+  On Base Sepolia these are arbitrary test ERC-20s. `web3/tokenRegistry.ts`
+  (Stage 3) resolves known addresses → {sym,name,color,decimals}; unknown
+  tokens fall back to symbol/decimals read on-chain + a default color +
+  shortened address (never breaks on an unknown token).

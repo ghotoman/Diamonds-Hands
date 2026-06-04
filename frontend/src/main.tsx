@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OnchainKitProvider } from "@coinbase/onchainkit";
 import { MiniKitProvider } from "@coinbase/onchainkit/minikit";
 
-import { config } from "./wagmi";
+import { config } from "./web3/config";
 import App from "./App";
 import "./index.css";
 

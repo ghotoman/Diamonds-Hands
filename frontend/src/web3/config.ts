@@ -3,9 +3,10 @@ import { baseSepolia } from "wagmi/chains";
 import { coinbaseWallet, injected } from "wagmi/connectors";
 import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 
-/// wagmi config V1: Base Sepolia only.
-/// - farcasterMiniApp: used automatically when running inside the Base App
-///   (Farcaster Mini App webview); MiniKit auto-connects it.
+const rpcUrl = import.meta.env.VITE_BASE_SEPOLIA_RPC_URL;
+
+/// wagmi config: Base Sepolia only.
+/// - farcasterMiniApp: auto-connected by MiniKit inside the Base App.
 /// - injected / coinbaseWallet: standalone web fallback.
 export const config = createConfig({
   chains: [baseSepolia],
@@ -15,12 +16,12 @@ export const config = createConfig({
     coinbaseWallet({ appName: "Diamond Hands", preference: "all" }),
   ],
   transports: {
-    [baseSepolia.id]: http(),
+    [baseSepolia.id]: http(rpcUrl),
   },
 });
 
-/// Connector id used by the Farcaster Mini App connector. Hidden from the
-/// manual connect list in standalone web (it auto-connects inside Base App).
+/// Connector id of the Farcaster Mini App connector — hidden from the
+/// manual connect list (it auto-connects inside the Base App).
 export const FARCASTER_CONNECTOR_ID = "farcaster";
 
 declare module "wagmi" {
