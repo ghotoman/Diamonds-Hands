@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAccount, useConnect, useSwitchChain } from "wagmi";
 import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import type { Address } from "viem";
@@ -207,7 +207,7 @@ export default function App() {
 
   // Base App: signal the Mini App is ready so the host dismisses its splash.
   // No-op outside the Base App.
-  const { setMiniAppReady, isMiniAppReady } = useMiniKit();
+  const { setMiniAppReady, isMiniAppReady, context } = useMiniKit();
   useEffect(() => {
     if (!isMiniAppReady) setMiniAppReady();
   }, [isMiniAppReady, setMiniAppReady]);
@@ -217,6 +217,19 @@ export default function App() {
   const { connect, connectors, isPending: connecting } = useConnect();
   const { switchChain, isPending: switching } = useSwitchChain();
   const wrongNetwork = isConnected && chainId !== CHAIN_ID;
+
+  // Inside the Base App the wallet IS the Farcaster Mini App connector —
+  // auto-connect it once (wagmi doesn't auto-connect on its own).
+  const inMiniApp = !!context;
+  const autoConnected = useRef(false);
+  useEffect(() => {
+    if (!inMiniApp || isConnected || autoConnected.current) return;
+    const fc = connectors.find((c) => c.id === FARCASTER_CONNECTOR_ID);
+    if (fc) {
+      autoConnected.current = true;
+      connect({ connector: fc });
+    }
+  }, [inMiniApp, isConnected, connectors, connect]);
 
   // data source: live on-chain reads, or the mock prototype (demo toggle)
   const [demo, setDemo] = useState(false); // prototype only
@@ -248,10 +261,15 @@ export default function App() {
   };
 
   const onConnect = () => {
-    const pick =
-      connectors.find((c) => c.id === "coinbaseWalletSDK") ??
-      connectors.find((c) => c.id === "injected") ??
-      connectors.find((c) => c.id !== FARCASTER_CONNECTOR_ID);
+    const byId = (id: string) => connectors.find((c) => c.id === id);
+    // browser: prefer an installed extension (MetaMask / Coinbase ext) over
+    // the Coinbase smart-wallet popup; fall back to it when no provider exists.
+    const hasInjected = typeof window !== "undefined" && "ethereum" in window;
+    const pick = inMiniApp
+      ? byId(FARCASTER_CONNECTOR_ID)
+      : hasInjected
+        ? (byId("injected") ?? byId("coinbaseWalletSDK"))
+        : (byId("coinbaseWalletSDK") ?? byId("injected"));
     if (pick) connect({ connector: pick });
   };
 
