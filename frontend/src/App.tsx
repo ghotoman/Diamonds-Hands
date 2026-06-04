@@ -231,6 +231,11 @@ export default function App() {
     }
   }, [inMiniApp, isConnected, connectors, connect]);
 
+  // Embedded in the Base App → full-bleed (drop the desktop phone-frame shell).
+  useEffect(() => {
+    document.body.classList.toggle("dh-embed", inMiniApp);
+  }, [inMiniApp]);
+
   // data source: live on-chain reads, or the mock prototype (demo toggle)
   const [demo, setDemo] = useState(false); // prototype only
   const live = useVaults(!demo && isConnected && !wrongNetwork ? address : undefined);
