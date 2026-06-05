@@ -46,7 +46,9 @@ export function CreateFlow({
 
   const t = token;
   const amt = parseFloat(amount) || 0;
-  const overBalance = !!t && t.balance !== undefined && amt > t.balance;
+  // block amounts above the (known) wallet balance — treat unknown/0 as 0 so a
+  // token you don't actually hold can't reach Lock and revert in the wallet.
+  const overBalance = !!t && amt > (t.balance ?? 0);
   const needsApprove = true; // mock: first lock of a token always needs approve
 
   const canNext =
