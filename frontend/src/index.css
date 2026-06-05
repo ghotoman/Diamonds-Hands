@@ -74,6 +74,21 @@ body {
     box-shadow: none;
   }
 }
+
+/* Embedded in a Mini App host (Base App): always full-bleed, regardless of the
+   webview's reported width. Toggled on <body> by App.tsx via useMiniKit context. */
+body.dh-embed {
+  padding: 0;
+}
+body.dh-embed .dh-phone {
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
 .dh-surface::-webkit-scrollbar {
   width: 0;
 }

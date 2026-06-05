@@ -231,6 +231,11 @@ export default function App() {
     }
   }, [inMiniApp, isConnected, connectors, connect]);
 
+  // Embedded in the Base App → full-bleed (drop the desktop phone-frame shell).
+  useEffect(() => {
+    document.body.classList.toggle("dh-embed", inMiniApp);
+  }, [inMiniApp]);
+
   // data source: live on-chain reads, or the mock prototype (demo toggle)
   const [demo, setDemo] = useState(false); // prototype only
   const live = useVaults(!demo && isConnected && !wrongNetwork ? address : undefined);
@@ -450,23 +455,25 @@ export default function App() {
 
   return (
     <div className="dh-phone font-sans">
-      {/* iOS status bar */}
-      <div className="h-[26px] px-6 flex items-center justify-between text-[12px] font-semibold text-ink shrink-0 select-none">
-        <span>9:41</span>
-        <span className="flex items-center gap-1.5">
-          <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor">
-            <rect x="0" y="6" width="3" height="5" rx="1" />
-            <rect x="4.5" y="4" width="3" height="7" rx="1" />
-            <rect x="9" y="2" width="3" height="9" rx="1" />
-            <rect x="13.5" y="0" width="3" height="11" rx="1" />
-          </svg>
-          <svg width="24" height="11" viewBox="0 0 24 11" fill="none">
-            <rect x=".5" y=".5" width="20" height="10" rx="3" stroke="currentColor" opacity=".4" />
-            <rect x="2" y="2" width="16" height="7" rx="1.5" fill="currentColor" />
-            <rect x="21.5" y="3.5" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".4" />
-          </svg>
-        </span>
-      </div>
+      {/* iOS status bar — dev shell only; the Base App provides the real one */}
+      {!inMiniApp && (
+        <div className="h-[26px] px-6 flex items-center justify-between text-[12px] font-semibold text-ink shrink-0 select-none">
+          <span>9:41</span>
+          <span className="flex items-center gap-1.5">
+            <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor">
+              <rect x="0" y="6" width="3" height="5" rx="1" />
+              <rect x="4.5" y="4" width="3" height="7" rx="1" />
+              <rect x="9" y="2" width="3" height="9" rx="1" />
+              <rect x="13.5" y="0" width="3" height="11" rx="1" />
+            </svg>
+            <svg width="24" height="11" viewBox="0 0 24 11" fill="none">
+              <rect x=".5" y=".5" width="20" height="10" rx="3" stroke="currentColor" opacity=".4" />
+              <rect x="2" y="2" width="16" height="7" rx="1.5" fill="currentColor" />
+              <rect x="21.5" y="3.5" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".4" />
+            </svg>
+          </span>
+        </div>
+      )}
 
       {/* Base App host bar */}
       <div className="h-12 px-3 flex items-center justify-between border-b border-line shrink-0 bg-white/80 backdrop-blur">
@@ -542,8 +549,8 @@ export default function App() {
         )}
       </div>
 
-      {/* demo toggle (prototype only) */}
-      {screen === "dashboard" && (
+      {/* demo toggle (prototype/dev only — hidden inside the Base App) */}
+      {!inMiniApp && screen === "dashboard" && (
         <button
           onClick={() => setDemo((d) => !d)}
           className="absolute top-1 left-1/2 -translate-x-1/2 z-50 text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-ink/70 text-white/90 backdrop-blur"
