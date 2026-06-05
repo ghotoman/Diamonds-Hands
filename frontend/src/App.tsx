@@ -202,6 +202,22 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+const DESKTOP_MQ = "(min-width: 768px) and (pointer: fine)";
+/// Desktop = wide screen + mouse. Touch devices (phones, the Base App webview)
+/// are not, so the dev-shell chrome (fake status bar, demo toggle) hides there.
+function useIsDesktop() {
+  const [desktop, setDesktop] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(DESKTOP_MQ).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_MQ);
+    const onChange = () => setDesktop(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return desktop;
+}
+
 export default function App() {
   const now = useTick(1000);
 
@@ -231,10 +247,8 @@ export default function App() {
     }
   }, [inMiniApp, isConnected, connectors, connect]);
 
-  // Embedded in the Base App → full-bleed (drop the desktop phone-frame shell).
-  useEffect(() => {
-    document.body.classList.toggle("dh-embed", inMiniApp);
-  }, [inMiniApp]);
+  // Dev-shell chrome (fake status bar + demo toggle) only on desktop preview.
+  const isDesktop = useIsDesktop();
 
   // data source: live on-chain reads, or the mock prototype (demo toggle)
   const [demo, setDemo] = useState(false); // prototype only
@@ -455,8 +469,8 @@ export default function App() {
 
   return (
     <div className="dh-phone font-sans">
-      {/* iOS status bar — dev shell only; the Base App provides the real one */}
-      {!inMiniApp && (
+      {/* iOS status bar — desktop dev shell only (a real device shows its own) */}
+      {isDesktop && (
         <div className="h-[26px] px-6 flex items-center justify-between text-[12px] font-semibold text-ink shrink-0 select-none">
           <span>9:41</span>
           <span className="flex items-center gap-1.5">
@@ -549,8 +563,8 @@ export default function App() {
         )}
       </div>
 
-      {/* demo toggle (prototype/dev only — hidden inside the Base App) */}
-      {!inMiniApp && screen === "dashboard" && (
+      {/* demo toggle (prototype/dev only — desktop preview) */}
+      {isDesktop && screen === "dashboard" && (
         <button
           onClick={() => setDemo((d) => !d)}
           className="absolute top-1 left-1/2 -translate-x-1/2 z-50 text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-ink/70 text-white/90 backdrop-blur"

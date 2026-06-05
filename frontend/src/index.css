@@ -31,63 +31,48 @@ body {
   background: #dce0e6;
   color: #0a0b0d;
   -webkit-font-smoothing: antialiased;
-  display: grid;
-  place-items: center;
-  min-height: 100vh;
-  padding: 20px;
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
-/* phone frame — Base App on a handset (kept as an optional dev shell) */
+/* Full-bleed by default — a real handset / the Base App webview fills the
+   viewport. Safe-area insets keep content clear of the notch / home indicator. */
 .dh-phone {
   position: relative;
-  width: 390px;
+  width: 100%;
   max-width: 100%;
-  height: min(844px, calc(100vh - 40px));
+  height: 100vh;
+  height: 100dvh;
   background: #fff;
-  border-radius: 40px;
-  box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.1),
-    0 24px 64px rgba(15, 20, 40, 0.28);
-  border: 1px solid #ebecf0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  /* respect device safe zones when running full-bleed (real handset / Base App) */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* On a real handset / embedded in the Base App, fill the viewport and drop
-   the dev-shell chrome. The framed look is kept for wider (desktop) screens. */
-@media (max-width: 480px) {
+/* Desktop preview only: the phone-frame dev shell shows on a wide, mouse-driven
+   screen. Touch devices (phones, the Base App webview) always stay full-bleed,
+   regardless of the width they report. */
+@media (min-width: 768px) and (pointer: fine) {
   body {
-    padding: 0;
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    padding: 20px;
   }
   .dh-phone {
-    width: 100%;
-    max-width: none;
-    height: 100vh;
-    height: 100dvh;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+    width: 390px;
+    height: min(844px, calc(100vh - 40px));
+    border: 1px solid #ebecf0;
+    border-radius: 40px;
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.1),
+      0 24px 64px rgba(15, 20, 40, 0.28);
+    padding-top: 0;
+    padding-bottom: 0;
   }
-}
-
-/* Embedded in a Mini App host (Base App): always full-bleed, regardless of the
-   webview's reported width. Toggled on <body> by App.tsx via useMiniKit context. */
-body.dh-embed {
-  padding: 0;
-}
-body.dh-embed .dh-phone {
-  width: 100%;
-  max-width: none;
-  height: 100vh;
-  height: 100dvh;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
 }
 .dh-surface::-webkit-scrollbar {
   width: 0;
