@@ -1,12 +1,15 @@
 import { useState } from "react";
+import { isAddress, type Address } from "viem";
 import type { Token, VaultMode } from "../types";
 import { cx, DAY, fmtNum, fmtUsd, PRESETS } from "../lib/helpers";
 import { MOCK_TOKENS } from "../lib/mock";
+import { useCustomToken } from "../web3/useTokens";
 import { Icon } from "../components/Icon";
 import { TokenBadge } from "../components/TokenBadge";
 import { ModeBadge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Label } from "../components/Label";
+import { Spinner } from "../components/Spinner";
 import { PenaltyCurve } from "../components/PenaltyCurve";
 
 export type CreateForm = {
@@ -24,10 +27,13 @@ export function CreateFlow({
   onCancel,
   onSubmit,
   tokens = MOCK_TOKENS,
+  allowCustom = false,
 }: {
   onCancel: () => void;
   onSubmit: (f: CreateForm) => void;
   tokens?: Token[];
+  /// live mode: let the user paste any ERC-20 contract address
+  allowCustom?: boolean;
 }) {
   const [step, setStep] = useState(1);
   const [token, setToken] = useState<Token | null>(null);
@@ -88,7 +94,16 @@ export function CreateFlow({
 
       {/* body */}
       <div className="flex-1 overflow-y-auto px-5 pb-4">
-        {step === 1 && <StepToken token={token} setToken={setToken} query={query} setQuery={setQuery} tokens={tokens} />}
+        {step === 1 && (
+          <StepToken
+            token={token}
+            setToken={setToken}
+            query={query}
+            setQuery={setQuery}
+            tokens={tokens}
+            allowCustom={allowCustom}
+          />
+        )}
         {step === 2 && t && <StepAmount t={t} amount={amount} setAmount={setAmount} amt={amt} over={overBalance} needsApprove={needsApprove} />}
         {step === 3 && <StepTerm days={days} setDays={setDays} customDate={customDate} setCustomDate={setCustomDate} />}
         {step === 4 && <StepMode mode={mode} setMode={setMode} penalty={penalty} setPenalty={setPenalty} />}
@@ -106,21 +121,68 @@ export function CreateFlow({
   );
 }
 
-// ── Step 1 — token picker ──
+// a selectable token row (shared by the known list + the custom-address result)
+function TokenRow({
+  t,
+  selected,
+  onSelect,
+  badge,
+}: {
+  t: Token;
+  selected: boolean;
+  onSelect: () => void;
+  badge?: string;
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      className={cx(
+        "flex items-center gap-3 rounded-xl p-3 min-h-[60px] transition active:scale-[.99]",
+        selected ? "bg-[#0000FF0A] ring-2 ring-baseblue" : "hover:bg-surface",
+      )}
+    >
+      <TokenBadge sym={t.sym} color={t.color} size={40} />
+      <div className="flex-1 text-left min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[15px] font-semibold text-ink truncate">{t.sym}</span>
+          {badge && (
+            <span className="shrink-0 rounded-md bg-[#0000FF12] text-baseblue text-[10px] font-bold px-1.5 py-0.5 uppercase tracking-wide">
+              {badge}
+            </span>
+          )}
+        </div>
+        <div className="text-[13px] text-sub truncate">{t.name}</div>
+      </div>
+      <div className="text-right shrink-0">
+        <div className="text-[15px] font-semibold text-ink tabular-nums">{fmtNum(t.balance ?? 0)}</div>
+        <div className="text-[12px] text-sub">{fmtUsd((t.balance ?? 0) * (t.price ?? 0))}</div>
+      </div>
+    </button>
+  );
+}
+
+// ── Step 1 — token picker (search, or paste any ERC-20 address in live mode) ──
 function StepToken({
   token,
   setToken,
   query,
   setQuery,
   tokens,
+  allowCustom,
 }: {
   token: Token | null;
   setToken: (t: Token) => void;
   query: string;
   setQuery: (q: string) => void;
   tokens: Token[];
+  allowCustom: boolean;
 }) {
+  const q = query.trim();
+  const isAddr = allowCustom && isAddress(q);
+  const custom = useCustomToken(isAddr ? (q as Address) : undefined);
   const list = tokens.filter((t) => (t.sym + t.name).toLowerCase().includes(query.toLowerCase()));
+  const isSel = (t: Token) => !!token && token.address.toLowerCase() === t.address.toLowerCase();
+
   return (
     <div>
       <div className="flex items-center gap-2 rounded-xl bg-surface border border-line px-3 h-12 mb-3">
@@ -128,38 +190,59 @@ function StepToken({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search token"
+          placeholder={allowCustom ? "Search or paste token address" : "Search token"}
+          spellCheck={false}
           className="flex-1 bg-transparent outline-none text-[15px] text-ink placeholder:text-sub"
         />
       </div>
-      <div className="flex flex-col gap-1">
-        {list.map((t) => (
-          <button
-            key={t.sym}
-            onClick={() => setToken(t)}
-            className={cx(
-              "flex items-center gap-3 rounded-xl p-3 min-h-[60px] transition active:scale-[.99]",
-              token?.sym === t.sym ? "bg-[#0000FF0A] ring-2 ring-baseblue" : "hover:bg-surface",
-            )}
-          >
-            <TokenBadge sym={t.sym} color={t.color} size={40} />
-            <div className="flex-1 text-left">
-              <div className="text-[15px] font-semibold text-ink">{t.sym}</div>
-              <div className="text-[13px] text-sub">{t.name}</div>
+
+      {isAddr ? (
+        <div className="flex flex-col gap-1">
+          {custom.isLoading ? (
+            <div className="flex items-center gap-3 p-3 min-h-[60px] text-sub text-[14px]">
+              <Spinner size={20} /> Looking up token…
             </div>
-            <div className="text-right">
-              <div className="text-[15px] font-semibold text-ink tabular-nums">{fmtNum(t.balance ?? 0)}</div>
-              <div className="text-[12px] text-sub">{fmtUsd((t.balance ?? 0) * (t.price ?? 0))}</div>
+          ) : custom.token ? (
+            <TokenRow
+              t={custom.token}
+              selected={isSel(custom.token)}
+              onSelect={() => setToken(custom.token!)}
+              badge="custom"
+            />
+          ) : (
+            <div className="flex gap-2 rounded-xl bg-[#E11D4808] border border-[#E11D4833] p-3 text-[13px] text-danger">
+              <Icon name="info" size={16} className="shrink-0 mt-0.5" />
+              <span>No ERC-20 found at this address on Base Sepolia. Check the address and the network.</span>
             </div>
-          </button>
-        ))}
-        {list.length === 0 && <div className="text-center text-sub text-[14px] py-8">Nothing found</div>}
-      </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {list.map((t) => (
+            <TokenRow key={t.address} t={t} selected={isSel(t)} onSelect={() => setToken(t)} />
+          ))}
+          {list.length === 0 && (
+            <div className="text-center text-sub text-[14px] py-8">
+              {allowCustom ? "Nothing found — paste a token contract address to add it." : "Nothing found"}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mt-3 flex gap-2 rounded-xl bg-surface border border-line p-3 text-[13px] text-sub">
         <Icon name="info" size={16} className="shrink-0 mt-0.5 text-baseblue" />
         <span>
-          Want to lock ETH? Wrap it to <b className="text-ink">WETH</b> — the app does this automatically.
-          The contract only works with ERC-20.
+          {allowCustom ? (
+            <>
+              Paste any <b className="text-ink">ERC-20 contract address</b> on Base Sepolia to lock it. Want ETH? Wrap
+              to <b className="text-ink">WETH</b> first.
+            </>
+          ) : (
+            <>
+              Want to lock ETH? Wrap it to <b className="text-ink">WETH</b> — the app does this automatically. The
+              contract only works with ERC-20.
+            </>
+          )}
         </span>
       </div>
     </div>

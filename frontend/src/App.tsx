@@ -546,6 +546,7 @@ export default function App() {
             onCancel={() => setScreen("dashboard")}
             onSubmit={onCreateSubmit}
             tokens={demo ? MOCK_TOKENS : liveTokens}
+            allowCustom={!demo}
           />
         )}
         {screen === "vault" && activeVault && (
