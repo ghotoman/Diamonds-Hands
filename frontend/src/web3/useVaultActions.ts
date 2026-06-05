@@ -13,6 +13,11 @@ type Step = { title: string; sub?: string; send: () => Promise<Hash> };
 type Flow = { steps: Step[]; success: { title: string; sub?: string } };
 
 const DAY_SECONDS = 86_400;
+const MIN_LOCK_SEC = 7 * DAY_SECONDS;
+const MAX_LOCK_SEC = 1825 * DAY_SECONDS;
+/// Push a min-term unlock comfortably past the contract's MIN bound so it can't
+/// revert with UnlockTooSoon due to client clock skew / estimation latency.
+const UNLOCK_BUFFER_SEC = 600; // 10 min
 
 /// Convert a human number to base units without exponential/precision drift.
 function toUnits(n: number, decimals: number): bigint {
@@ -87,7 +92,21 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
       try {
         const asset = form.token.address;
         const amount = toUnits(form.amount, form.token.decimals);
-        const unlock = BigInt(Math.floor(Date.now() / 1000) + form.days * DAY_SECONDS);
+        // Base the unlock on the chain clock (not the device) and clear the
+        // MIN/MAX bounds with a buffer — a 7-day lock was reverting with
+        // UnlockTooSoon when the device clock lagged the chain.
+        let baseSec: number;
+        try {
+          baseSec = Number((await publicClient.getBlock()).timestamp);
+        } catch {
+          baseSec = Math.floor(Date.now() / 1000);
+        }
+        let unlockSec = baseSec + form.days * DAY_SECONDS;
+        const minUnlock = baseSec + MIN_LOCK_SEC + UNLOCK_BUFFER_SEC;
+        if (unlockSec < minUnlock) unlockSec = minUnlock;
+        const maxUnlock = baseSec + MAX_LOCK_SEC;
+        if (unlockSec > maxUnlock) unlockSec = maxUnlock;
+        const unlock = BigInt(unlockSec);
         const soft = form.mode === "soft";
         const maxPenaltyBps = soft ? Math.round((form.penalty ?? 0) * 100) : 0;
 
