@@ -4,6 +4,10 @@ import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError } fr
 export type TxStage = "wallet" | "pending" | "success" | "error";
 export type TxErrorKind = "rejected" | "gas" | "approve" | "generic";
 
+/// Optional cast-composer payload — surfaced as a "Share to Base App" button
+/// on the success overlay when the app is running inside a Mini App.
+export type ShareCast = { text: string; embeds?: [string] | [string, string] };
+
 export type TxState = {
   stage: TxStage;
   title: string;
@@ -12,6 +16,8 @@ export type TxState = {
   hash?: string;
   error?: string;
   errorKind?: TxErrorKind;
+  /// when present (and inside a Mini App), success overlay shows a Share button
+  share?: ShareCast;
   /// re-run the same flow from the error overlay's "Try again"
   _retry?: () => void;
 } | null;
