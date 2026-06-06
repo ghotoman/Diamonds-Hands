@@ -5,12 +5,12 @@ import type { Vault } from "../types";
 import type { CreateForm } from "../screens/CreateFlow";
 import { currentPenaltyPct, fmtNum } from "../lib/helpers";
 import { FACTORY_ADDRESS, erc20Abi, factoryAbi, vaultAbi } from "./contracts";
-import { parseTxError, type SetTx } from "./tx";
+import { parseTxError, type SetTx, type ShareCast } from "./tx";
 
 type Hash = `0x${string}`;
 /// One signature in a flow: set the wallet stage, then `send` to get a hash.
 type Step = { title: string; sub?: string; send: () => Promise<Hash> };
-type Flow = { steps: Step[]; success: { title: string; sub?: string } };
+type Flow = { steps: Step[]; success: { title: string; sub?: string; share?: ShareCast } };
 
 const DAY_SECONDS = 86_400;
 const MIN_LOCK_SEC = 7 * DAY_SECONDS;
@@ -55,7 +55,13 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
           const receipt = await publicClient.waitForTransactionReceipt({ hash: lastHash });
           if (receipt.status === "reverted") throw new Error("Transaction reverted on-chain.");
         }
-        setTx({ stage: "success", title: flow.success.title, sub: flow.success.sub, hash: lastHash });
+        setTx({
+          stage: "success",
+          title: flow.success.title,
+          sub: flow.success.sub,
+          share: flow.success.share,
+          hash: lastHash,
+        });
         onSettled?.();
         return true;
       } catch (err) {
@@ -125,9 +131,17 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
             }),
         });
 
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const shareText =
+          `🔒 Just locked ${fmtNum(form.amount)} $${form.token.sym} for ${form.days} days on Diamond Hands.\n` +
+          `💎 Beat paper hands. ${form.mode === "hard" ? "Hard lock — no exit." : "Soft lock — exit costs."}`;
         return runFlow({
           steps,
-          success: { title: "Vault created 💎", sub: `${fmtNum(form.amount)} ${form.token.sym} locked for ${form.days} days` },
+          success: {
+            title: "Vault created 💎",
+            sub: `${fmtNum(form.amount)} ${form.token.sym} locked for ${form.days} days`,
+            share: { text: shareText, embeds: origin ? [origin] : undefined },
+          },
         });
       } catch (err) {
         const p = parseTxError(err);

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useConnect, useSwitchChain } from "wagmi";
-import { useMiniKit } from "@coinbase/onchainkit/minikit";
+import { useComposeCast, useIsInMiniApp, useMiniKit } from "@coinbase/onchainkit/minikit";
 import type { Address } from "viem";
 import type { Vault } from "./types";
 import { DAY, fmtNum, currentPenaltyPct, shortAddr } from "./lib/helpers";
@@ -11,6 +11,7 @@ import { FARCASTER_CONNECTOR_ID } from "./web3/config";
 import { useVaults } from "./web3/useVaults";
 import { useTokens } from "./web3/useTokens";
 import { useVaultActions } from "./web3/useVaultActions";
+import { useVaultEvents } from "./web3/useVaultEvents";
 import type { TxState } from "./web3/tx";
 import { Icon } from "./components/Icon";
 import { Logo } from "./components/Logo";
@@ -22,10 +23,13 @@ import { VaultDetail, EmergencyModal, ActionSheet, type ActionKind } from "./scr
 
 // ── Transaction overlay: wallet → pending → success | error ──
 function TxOverlay({ tx, onClose, onRetry }: { tx: TxState; onClose: () => void; onRetry: () => void }) {
+  const { composeCast } = useComposeCast();
+  const { isInMiniApp } = useIsInMiniApp();
   if (!tx) return null;
-  const { stage, title, sub, hash, error, errorKind } = tx;
+  const { stage, title, sub, hash, error, errorKind, share } = tx;
   const done = stage === "success";
   const isErr = stage === "error";
+  const canShare = done && !!share && isInMiniApp === true;
 
   return (
     <div className="absolute inset-0 z-[60] flex items-end">
@@ -64,9 +68,21 @@ function TxOverlay({ tx, onClose, onRetry }: { tx: TxState; onClose: () => void;
               {shortAddr(hash)} on BaseScan
               <Icon name="external" size={15} />
             </a>
-            <Button className="w-full mt-6" onClick={onClose}>
-              Done
-            </Button>
+            {canShare ? (
+              <>
+                <Button className="w-full mt-6" onClick={() => share && composeCast(share)}>
+                  <Icon name="spark" size={18} />
+                  Share to Base App
+                </Button>
+                <Button variant="ghost" className="w-full mt-2 text-sub" onClick={onClose}>
+                  Done
+                </Button>
+              </>
+            ) : (
+              <Button className="w-full mt-6" onClick={onClose}>
+                Done
+              </Button>
+            )}
           </>
         )}
         {isErr && (
@@ -265,10 +281,27 @@ export default function App() {
     v: null,
   });
   const [tx, setTx] = useState<TxState>(null);
-  const actions = useVaultActions(setTx, live.refetch);
 
   const source = demo ? mock : live.vaults;
   const activeVault = source.find((v) => v.address === activeId);
+
+  // Streak / last-check-in indexed from on-chain CheckedIn events (live only).
+  const liveEvents = useVaultEvents(!demo ? activeVault : undefined);
+
+  const actions = useVaultActions(setTx, () => {
+    live.refetch();
+    liveEvents.refetch();
+  });
+  const renderVault = useMemo(() => {
+    if (!activeVault) return undefined;
+    if (demo) return activeVault;
+    if (liveEvents.isLoading || liveEvents.isError) return activeVault;
+    return {
+      ...activeVault,
+      checkIns: liveEvents.checkIns,
+      lastCheckIn: liveEvents.lastCheckIn,
+    };
+  }, [activeVault, demo, liveEvents]);
 
   // is the dashboard showing a real list (vs. a gate/loading/error state)?
   const dashReady = demo || (isConnected && !wrongNetwork && !live.isLoading && !live.isError);
@@ -549,8 +582,8 @@ export default function App() {
             allowCustom={!demo}
           />
         )}
-        {screen === "vault" && activeVault && (
-          <VaultDetail v={activeVault} now={now} onBack={() => setScreen("dashboard")} onAction={onVaultAction} />
+        {screen === "vault" && renderVault && (
+          <VaultDetail v={renderVault} now={now} onBack={() => setScreen("dashboard")} onAction={onVaultAction} />
         )}
 
         {/* sticky create CTA on dashboard */}
