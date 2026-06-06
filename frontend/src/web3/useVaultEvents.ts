@@ -7,6 +7,14 @@ import { CHAIN_ID, vaultAbi } from "./contracts";
 
 const DAY_MS = 86_400_000;
 const CHECKED_IN_EVENT = getAbiItem({ abi: vaultAbi, name: "CheckedIn" });
+/// Per-chunk block range — safe for public Base RPCs (which usually cap
+/// eth_getLogs at ~10k blocks). Tunable per env.
+const CHUNK = 9_000n;
+/// Max parallel getLogs in flight.
+const CONCURRENCY = 5;
+/// Cap the scan to the most recent N days. A 30-day cap covers any plausible
+/// streak; older check-ins age out and don't count anyway.
+const MAX_SCAN_DAYS = 30;
 
 export type VaultEvents = {
   /// Streak: consecutive UTC days with a check-in, ending today or yesterday.
@@ -32,26 +40,46 @@ export function useVaultEvents(vault?: Vault): VaultEvents {
     staleTime: 30_000,
     queryFn: async (): Promise<number[]> => {
       if (!vault || !publicClient) return [];
-      // Cheap range: this lock period + 1 day buffer. Bounds getLogs for the
-      // strict public RPCs (Base sepolia ~2s blocks).
-      let fromBlock = 0n;
-      try {
-        const latest = await publicClient.getBlock({ blockTag: "latest" });
-        const elapsedSec = Math.max(0, Number(latest.timestamp) - Math.floor(vault.start / 1000));
-        const approxBlocks = BigInt(Math.ceil(elapsedSec / 2) + 43_200);
-        fromBlock = latest.number > approxBlocks ? latest.number - approxBlocks : 0n;
-      } catch {
-        // fall back to 'earliest'
+      // Range: min(lock-period-elapsed, MAX_SCAN_DAYS) + 1d buffer. Scanned in
+      // chunks so strict public RPCs (Base sepolia caps ~10k blocks/call) work.
+      const latest = await publicClient.getBlock({ blockTag: "latest" });
+      const elapsedSec = Math.max(0, Number(latest.timestamp) - Math.floor(vault.start / 1000));
+      const cappedSec = Math.min(elapsedSec, MAX_SCAN_DAYS * 86_400);
+      const approxBlocks = BigInt(Math.ceil(cappedSec / 2) + 43_200);
+      const fromBlock = latest.number > approxBlocks ? latest.number - approxBlocks : 0n;
+      const toBlock = latest.number;
+      // Build CHUNK-sized ranges; run them with bounded parallelism. A failed
+      // chunk (RPC range cap, rate limit) is skipped so partial data still
+      // gives a useful streak instead of throwing the whole query.
+      const ranges: Array<[bigint, bigint]> = [];
+      for (let f = fromBlock; f <= toBlock; f = f + CHUNK + 1n) {
+        const t = f + CHUNK > toBlock ? toBlock : f + CHUNK;
+        ranges.push([f, t]);
       }
-      const logs = await publicClient.getLogs({
-        address: vault.address,
-        event: CHECKED_IN_EVENT,
-        fromBlock,
-        toBlock: "latest",
-      });
-      const ts = logs
-        .map((l) => Number((l.args as { timestamp: bigint }).timestamp) * 1000)
-        .filter((t) => Number.isFinite(t));
+      const ts: number[] = [];
+      for (let i = 0; i < ranges.length; i += CONCURRENCY) {
+        const batch = ranges.slice(i, i + CONCURRENCY);
+        const got = await Promise.all(
+          batch.map(async ([f, t]) => {
+            try {
+              return await publicClient.getLogs({
+                address: vault.address,
+                event: CHECKED_IN_EVENT,
+                fromBlock: f,
+                toBlock: t,
+              });
+            } catch {
+              return [];
+            }
+          }),
+        );
+        for (const logs of got) {
+          for (const log of logs) {
+            const stamp = log.args?.timestamp;
+            if (typeof stamp === "bigint") ts.push(Number(stamp) * 1000);
+          }
+        }
+      }
       ts.sort((a, b) => a - b);
       return ts;
     },

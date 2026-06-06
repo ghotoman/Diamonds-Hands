@@ -29,7 +29,21 @@ function TxOverlay({ tx, onClose, onRetry }: { tx: TxState; onClose: () => void;
   const { stage, title, sub, hash, error, errorKind, share } = tx;
   const done = stage === "success";
   const isErr = stage === "error";
-  const canShare = done && !!share && isInMiniApp === true;
+  const canShare = done && !!share;
+  // Inside the Base App / Mini App use the native composer; otherwise (or when
+  // the SDK check is still resolving) fall back to the Warpcast compose URL so
+  // the Share button always does *something* useful.
+  const onShare = () => {
+    if (!share) return;
+    if (isInMiniApp === true) {
+      composeCast(share);
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set("text", share.text);
+    (share.embeds ?? []).forEach((e) => params.append("embeds[]", e));
+    window.open(`https://warpcast.com/~/compose?${params.toString()}`, "_blank", "noopener");
+  };
 
   return (
     <div className="absolute inset-0 z-[60] flex items-end">
@@ -70,9 +84,9 @@ function TxOverlay({ tx, onClose, onRetry }: { tx: TxState; onClose: () => void;
             </a>
             {canShare ? (
               <>
-                <Button className="w-full mt-6" onClick={() => share && composeCast(share)}>
+                <Button className="w-full mt-6" onClick={onShare}>
                   <Icon name="spark" size={18} />
-                  Share to Base App
+                  Share
                 </Button>
                 <Button variant="ghost" className="w-full mt-2 text-sub" onClick={onClose}>
                   Done
@@ -295,7 +309,10 @@ export default function App() {
   const renderVault = useMemo(() => {
     if (!activeVault) return undefined;
     if (demo) return activeVault;
-    if (liveEvents.isLoading || liveEvents.isError) return activeVault;
+    if (liveEvents.isLoading) return activeVault;
+    // Override even on error: a failed getLogs (e.g. RPC range cap) means we
+    // can't prove a streak, so the safer UI is "0 in a row" rather than a
+    // stuck "Build your streak on-chain" pseudo-loading state.
     return {
       ...activeVault,
       checkIns: liveEvents.checkIns,
