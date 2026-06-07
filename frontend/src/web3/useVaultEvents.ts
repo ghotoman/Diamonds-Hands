@@ -1,20 +1,22 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { usePublicClient } from "wagmi";
-import { getAbiItem } from "viem";
+import { parseAbiItem } from "viem";
 import type { Vault } from "../types";
-import { CHAIN_ID, vaultAbi } from "./contracts";
+import { CHAIN_ID } from "./contracts";
 
 const DAY_MS = 86_400_000;
-const CHECKED_IN_EVENT = getAbiItem({ abi: vaultAbi, name: "CheckedIn" });
-/// Per-chunk block range — safe for public Base RPCs (which usually cap
-/// eth_getLogs at ~10k blocks). Tunable per env.
-const CHUNK = 9_000n;
-/// Max parallel getLogs in flight.
-const CONCURRENCY = 5;
-/// Cap the scan to the most recent N days. A 30-day cap covers any plausible
-/// streak; older check-ins age out and don't count anyway.
-const MAX_SCAN_DAYS = 30;
+/// Explicit event signature — robust across viem ABI item typings.
+const CHECKED_IN_EVENT = parseAbiItem("event CheckedIn(address indexed owner, uint256 timestamp)");
+/// Per-chunk block range. Public Base sepolia RPC rejects anything bigger,
+/// so we go conservative; premium RPCs handle this fine too.
+const CHUNK = 500n;
+/// Max parallel getLogs in flight — keep the wall-clock down without
+/// tripping per-second rate limits on public endpoints.
+const CONCURRENCY = 10;
+/// Cap the scan window. 7 days covers any plausible "streak ending today",
+/// and keeps even small-chunk fan-out tractable on slow RPCs.
+const MAX_SCAN_DAYS = 7;
 
 export type VaultEvents = {
   /// Streak: consecutive UTC days with a check-in, ending today or yesterday.
@@ -57,6 +59,8 @@ export function useVaultEvents(vault?: Vault): VaultEvents {
         ranges.push([f, t]);
       }
       const ts: number[] = [];
+      let failures = 0;
+      let firstError: unknown = null;
       for (let i = 0; i < ranges.length; i += CONCURRENCY) {
         const batch = ranges.slice(i, i + CONCURRENCY);
         const got = await Promise.all(
@@ -68,7 +72,9 @@ export function useVaultEvents(vault?: Vault): VaultEvents {
                 fromBlock: f,
                 toBlock: t,
               });
-            } catch {
+            } catch (err) {
+              failures++;
+              if (!firstError) firstError = err;
               return [];
             }
           }),
@@ -79,6 +85,15 @@ export function useVaultEvents(vault?: Vault): VaultEvents {
             if (typeof stamp === "bigint") ts.push(Number(stamp) * 1000);
           }
         }
+      }
+      if (failures > 0) {
+        // Surface the cause in DevTools so a "0 streak" issue is debuggable.
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[useVaultEvents] ${failures}/${ranges.length} chunks failed for ${vault.address}.`,
+          "Consider a more permissive RPC (Alchemy / QuickNode). First error:",
+          firstError,
+        );
       }
       ts.sort((a, b) => a - b);
       return ts;
