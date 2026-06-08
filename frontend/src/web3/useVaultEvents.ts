@@ -8,14 +8,13 @@ import { CHAIN_ID } from "./contracts";
 const DAY_MS = 86_400_000;
 /// Explicit event signature — robust across viem ABI item typings.
 const CHECKED_IN_EVENT = parseAbiItem("event CheckedIn(address indexed owner, uint256 timestamp)");
-/// Per-chunk block range. Public Base sepolia RPC rejects anything bigger,
-/// so we go conservative; premium RPCs handle this fine too.
-const CHUNK = 500n;
-/// Max parallel getLogs in flight — keep the wall-clock down without
-/// tripping per-second rate limits on public endpoints.
-const CONCURRENCY = 10;
-/// Cap the scan window. 7 days covers any plausible "streak ending today",
-/// and keeps even small-chunk fan-out tractable on slow RPCs.
+/// Per-chunk block range. Alchemy / QuickNode handle 10k blocks/call; tune
+/// down if you point at a stricter provider (public sepolia.base.org caps
+/// around 500). Failed chunks are skipped, not fatal.
+const CHUNK = 9_000n;
+/// Max parallel getLogs in flight — premium RPCs handle ~10 RPS easily.
+const CONCURRENCY = 5;
+/// Cap the scan window. 7 days covers any plausible "streak ending today".
 const MAX_SCAN_DAYS = 7;
 
 export type VaultEvents = {
