@@ -8,14 +8,17 @@ import { CHAIN_ID } from "./contracts";
 const DAY_MS = 86_400_000;
 /// Explicit event signature — robust across viem ABI item typings.
 const CHECKED_IN_EVENT = parseAbiItem("event CheckedIn(address indexed owner, uint256 timestamp)");
-/// Per-chunk block range. Public Base sepolia RPC rejects anything bigger,
-/// so we go conservative; premium RPCs handle this fine too.
-const CHUNK = 500n;
-/// Max parallel getLogs in flight — keep the wall-clock down without
-/// tripping per-second rate limits on public endpoints.
-const CONCURRENCY = 10;
-/// Cap the scan window. 7 days covers any plausible "streak ending today",
-/// and keeps even small-chunk fan-out tractable on slow RPCs.
+/// eth_getLogs block-range caps differ wildly per provider (public Base RPC,
+/// Alchemy free tier ~2k, QuickNode 10k…). A cheap descending probe on the
+/// newest slice finds what this provider accepts; the rest of the window is
+/// then scanned at that size, newest-first.
+const PROBE_SIZES = [9_000n, 1_900n, 450n] as const;
+/// Max parallel getLogs in flight.
+const CONCURRENCY = 5;
+/// Hard budget of scan calls per refresh — keeps tiny-cap providers from
+/// burning hundreds of requests. Newest blocks win when truncated.
+const MAX_CALLS = 60;
+/// Cap the scan window. 7 days covers any plausible "streak ending today".
 const MAX_SCAN_DAYS = 7;
 
 export type VaultEvents = {
@@ -50,48 +53,77 @@ export function useVaultEvents(vault?: Vault): VaultEvents {
       const approxBlocks = BigInt(Math.ceil(cappedSec / 2) + 43_200);
       const fromBlock = latest.number > approxBlocks ? latest.number - approxBlocks : 0n;
       const toBlock = latest.number;
-      // Build CHUNK-sized ranges; run them with bounded parallelism. A failed
-      // chunk (RPC range cap, rate limit) is skipped so partial data still
-      // gives a useful streak instead of throwing the whole query.
-      const ranges: Array<[bigint, bigint]> = [];
-      for (let f = fromBlock; f <= toBlock; f = f + CHUNK + 1n) {
-        const t = f + CHUNK > toBlock ? toBlock : f + CHUNK;
-        ranges.push([f, t]);
-      }
+
       const ts: number[] = [];
-      let failures = 0;
+      const collect = (logs: Awaited<ReturnType<typeof publicClient.getLogs>>) => {
+        for (const log of logs) {
+          const stamp = (log as { args?: { timestamp?: unknown } }).args?.timestamp;
+          if (typeof stamp === "bigint") ts.push(Number(stamp) * 1000);
+        }
+      };
+      const fetchRange = (f: bigint, t: bigint) =>
+        publicClient.getLogs({
+          address: vault.address,
+          event: CHECKED_IN_EVENT,
+          fromBlock: f,
+          toBlock: t,
+        });
+
+      // 1) Probe, newest slice first: whole window, then descending sizes.
+      //    The successful probe's logs are already the most recent data.
       let firstError: unknown = null;
+      let chunk: bigint | null = null;
+      let scannedDownTo: bigint | null = null;
+      const windowSize = toBlock - fromBlock;
+      const sizes = [windowSize, ...PROBE_SIZES.filter((s) => s < windowSize)];
+      for (const size of sizes) {
+        const f = toBlock - size < fromBlock ? fromBlock : toBlock - size;
+        try {
+          collect(await fetchRange(f, toBlock));
+          chunk = size;
+          scannedDownTo = f;
+          break;
+        } catch (err) {
+          if (!firstError) firstError = err;
+        }
+      }
+      if (chunk === null || scannedDownTo === null) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[useVaultEvents] eth_getLogs unusable on this RPC even at ${PROBE_SIZES[PROBE_SIZES.length - 1]} blocks — streak shows 0.`,
+          "Set VITE_BASE_SEPOLIA_RPC_URL to a provider like Alchemy. First error:",
+          firstError,
+        );
+        return ts;
+      }
+
+      // 2) Scan the remaining window newest→oldest at the probed size, within
+      //    a hard call budget (recent days matter most for the streak).
+      const ranges: Array<[bigint, bigint]> = [];
+      for (let t = scannedDownTo - 1n; t >= fromBlock; t -= chunk + 1n) {
+        const f = t - chunk < fromBlock ? fromBlock : t - chunk;
+        ranges.push([f, t]);
+        if (ranges.length >= MAX_CALLS) break;
+      }
+      let failures = 0;
       for (let i = 0; i < ranges.length; i += CONCURRENCY) {
         const batch = ranges.slice(i, i + CONCURRENCY);
-        const got = await Promise.all(
+        await Promise.all(
           batch.map(async ([f, t]) => {
             try {
-              return await publicClient.getLogs({
-                address: vault.address,
-                event: CHECKED_IN_EVENT,
-                fromBlock: f,
-                toBlock: t,
-              });
+              collect(await fetchRange(f, t));
             } catch (err) {
               failures++;
               if (!firstError) firstError = err;
-              return [];
             }
           }),
         );
-        for (const logs of got) {
-          for (const log of logs) {
-            const stamp = log.args?.timestamp;
-            if (typeof stamp === "bigint") ts.push(Number(stamp) * 1000);
-          }
-        }
       }
       if (failures > 0) {
-        // Surface the cause in DevTools so a "0 streak" issue is debuggable.
         // eslint-disable-next-line no-console
         console.warn(
-          `[useVaultEvents] ${failures}/${ranges.length} chunks failed for ${vault.address}.`,
-          "Consider a more permissive RPC (Alchemy / QuickNode). First error:",
+          `[useVaultEvents] ${failures}/${ranges.length} ranges failed for ${vault.address}; streak may undercount older days.`,
+          "First error:",
           firstError,
         );
       }
