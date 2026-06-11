@@ -282,11 +282,18 @@ forge script script/Deploy.s.sol:Deploy \
 - Верификация: ✅ Sourcify (2026-06-04), оба контракта `Response: OK`.
   BaseScan отображает исходники по Sourcify-матчу.
 
-### Base Sepolia v2 (chainId 84532) — min lock 1 день
-- НЕ ЗАДЕПЛОЕНО (runbook: секция 9). После деплоя заполнить:
-  - DiamondHandsVault implementation: `0x…`
-  - DiamondHandsFactory v2: `0x…`
-  - Block / tx hashes / верификация
+### Base Sepolia v2 (chainId 84532) — min lock 1 день, задеплоено 2026-06-11
+- DiamondHandsVault implementation: `0xD41FA9D180187C79E220A1C5968Da8E145646f07`
+- DiamondHandsFactory v2: `0xE0a0836f19d604e3aEEf1c55a59e50e1cE806cC3`
+- Fee receiver: `0x51eEE5409d3126505adF87F7EE5B96ae3e468e30`
+- Deployer (Factory owner): `0x51eEE5409d3126505adF87F7EE5B96ae3e468e30`
+- Block: 42704674
+- Tx hash impl: `0x43bf9625e8361f620103620c69d3b7bfa4040525cd32e548d96014f0e827b1a8`
+- Tx hash factory: `0xe3528231037ea47e6c5eece534f770afb47546801db98c44f1385e5c38dfc54b`
+- Explorer:
+  - https://sepolia.basescan.org/address/0xD41FA9D180187C79E220A1C5968Da8E145646f07
+  - https://sepolia.basescan.org/address/0xE0a0836f19d604e3aEEf1c55a59e50e1cE806cC3
+- Верификация: ⏳ Sourcify (шаг 7: `forge verify-contract <addr> <contract> --verifier sourcify`)
 
 ### Base Mainnet (chainId 8453)
 - НЕ ЗАДЕПЛОЕНО
