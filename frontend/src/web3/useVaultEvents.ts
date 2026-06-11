@@ -28,6 +28,9 @@ export type VaultEvents = {
   totalCheckIns: number;
   /// Most recent check-in (ms epoch), undefined if none.
   lastCheckIn?: number;
+  /// true when this RPC can't serve eth_getLogs at all — the streak is
+  /// unknowable, not zero. UI should say "unavailable", not "0".
+  degraded: boolean;
   isLoading: boolean;
   isError: boolean;
   refetch: () => void;
@@ -43,8 +46,8 @@ export function useVaultEvents(vault?: Vault): VaultEvents {
     queryKey: ["vault-events", CHAIN_ID, vault?.address?.toLowerCase()],
     enabled: !!vault && !!publicClient,
     staleTime: 30_000,
-    queryFn: async (): Promise<number[]> => {
-      if (!vault || !publicClient) return [];
+    queryFn: async (): Promise<{ ts: number[]; degraded: boolean }> => {
+      if (!vault || !publicClient) return { ts: [], degraded: false };
       // Range: min(lock-period-elapsed, MAX_SCAN_DAYS) + 1d buffer. Scanned in
       // chunks so strict public RPCs (Base sepolia caps ~10k blocks/call) work.
       const latest = await publicClient.getBlock({ blockTag: "latest" });
@@ -90,11 +93,11 @@ export function useVaultEvents(vault?: Vault): VaultEvents {
       if (chunk === null || scannedDownTo === null) {
         // eslint-disable-next-line no-console
         console.warn(
-          `[useVaultEvents] eth_getLogs unusable on this RPC even at ${PROBE_SIZES[PROBE_SIZES.length - 1]} blocks — streak shows 0.`,
+          `[useVaultEvents] eth_getLogs unusable on this RPC even at ${PROBE_SIZES[PROBE_SIZES.length - 1]} blocks — streak unavailable.`,
           "Set VITE_BASE_SEPOLIA_RPC_URL to a provider like Alchemy. First error:",
           firstError,
         );
-        return ts;
+        return { ts, degraded: true };
       }
 
       // 2) Scan the remaining window newest→oldest at the probed size, within
@@ -128,12 +131,13 @@ export function useVaultEvents(vault?: Vault): VaultEvents {
         );
       }
       ts.sort((a, b) => a - b);
-      return ts;
+      return { ts, degraded: false };
     },
   });
 
   return useMemo<VaultEvents>(() => {
-    const ts = q.data ?? [];
+    const ts = q.data?.ts ?? [];
+    const degraded = q.data?.degraded ?? false;
     const total = ts.length;
     const last = total > 0 ? ts[total - 1] : undefined;
     const today = Math.floor(Date.now() / DAY_MS);
@@ -149,6 +153,7 @@ export function useVaultEvents(vault?: Vault): VaultEvents {
       checkIns: streak,
       totalCheckIns: total,
       lastCheckIn: last,
+      degraded,
       isLoading: q.isLoading,
       isError: q.isError,
       refetch: () => void q.refetch(),

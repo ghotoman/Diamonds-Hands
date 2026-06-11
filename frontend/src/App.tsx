@@ -310,13 +310,15 @@ export default function App() {
     if (!activeVault) return undefined;
     if (demo) return activeVault;
     if (liveEvents.isLoading) return activeVault;
-    // Override even on error: a failed getLogs (e.g. RPC range cap) means we
-    // can't prove a streak, so the safer UI is "0 in a row" rather than a
-    // stuck "Build your streak on-chain" pseudo-loading state.
+    // RPC can't serve logs (degraded/error) → the streak is UNKNOWN, not zero.
+    // VaultDetail renders "Streak unavailable" for that, so a true
+    // "0 check-ins in a row" can only mean "no events on-chain".
+    const unknown = liveEvents.degraded || liveEvents.isError;
     return {
       ...activeVault,
-      checkIns: liveEvents.checkIns,
-      lastCheckIn: liveEvents.lastCheckIn,
+      checkIns: unknown ? undefined : liveEvents.checkIns,
+      lastCheckIn: unknown ? undefined : liveEvents.lastCheckIn,
+      streakUnavailable: unknown,
     };
   }, [activeVault, demo, liveEvents]);
 

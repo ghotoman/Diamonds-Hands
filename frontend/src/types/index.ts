@@ -39,4 +39,6 @@ export type Vault = {
   /// optional until an indexer exists)
   checkIns?: number;
   lastCheckIn?: number;
+  /// the RPC couldn't serve event logs — streak is unknown, not zero
+  streakUnavailable?: boolean;
 };
