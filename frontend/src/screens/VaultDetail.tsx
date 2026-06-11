@@ -130,11 +130,13 @@ export function VaultDetail({
               {v.checkIns !== undefined ? `${v.checkIns} check-ins in a row` : "Daily check-in"}
             </div>
             <div className="text-[12px] text-sub">
-              {checkedToday
-                ? "Checked in today ✓"
-                : v.checkIns !== undefined
-                  ? "Not checked in today"
-                  : "Build your streak on-chain"}
+              {v.streakUnavailable
+                ? "Streak unavailable — network didn't answer"
+                : checkedToday
+                  ? "Checked in today ✓"
+                  : v.checkIns !== undefined
+                    ? "Not checked in today"
+                    : "Build your streak on-chain"}
             </div>
           </div>
           <Button
