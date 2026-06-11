@@ -194,7 +194,7 @@ contract FactoryHandler is Test {
     function createSoft(uint256 rawAmount, uint256 rawDuration, uint16 rawBps, bool useAlice) external {
         address actor = useAlice ? alice : bob;
         uint256 amount = bound(rawAmount, 1, 1_000_000 ether);
-        uint256 duration = bound(rawDuration, 7 days, 1825 days);
+        uint256 duration = bound(rawDuration, 1 days, 1825 days);
         uint16 bps = uint16(bound(rawBps, 500, 3000));
 
         // обеспечиваем баланс actor'а
@@ -207,7 +207,7 @@ contract FactoryHandler is Test {
     function createHard(uint256 rawAmount, uint256 rawDuration, bool useAlice) external {
         address actor = useAlice ? alice : bob;
         uint256 amount = bound(rawAmount, 1, 1_000_000 ether);
-        uint256 duration = bound(rawDuration, 7 days, 1825 days);
+        uint256 duration = bound(rawDuration, 1 days, 1825 days);
 
         if (token.balanceOf(actor) < amount) token.mint(actor, amount);
 

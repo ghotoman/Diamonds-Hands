@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from "react";
-import { useAccount, useReadContract, useReadContracts } from "wagmi";
+import { useAccount, useReadContracts } from "wagmi";
 import type { Address } from "viem";
 import type { Vault } from "../types";
-import { CHAIN_ID, FACTORY_ADDRESS, erc20Abi, factoryAbi, vaultAbi } from "./contracts";
+import { CHAIN_ID, FACTORY_ADDRESSES, erc20Abi, factoryAbi, vaultAbi } from "./contracts";
 import { mapVault, type AssetMeta, type VaultReads } from "./mapVault";
 
 /// Vault view fields read per clone, in this fixed order (consumed by mapVault).
@@ -123,26 +123,40 @@ function useVaultReads(addresses: Address[]) {
 }
 
 /// All vaults owned by `owner` (undefined disables the read).
-/// Reads Factory.getVaultsByOwner → multicall each Vault → map to UI Vault[].
-/// Returns coarse states for the UI: isLoading / isError / isEmpty.
+/// Reads getVaultsByOwner from EVERY factory (active + legacy) so vaults
+/// created before a factory redeploy stay visible, then multicall each Vault
+/// → map to UI Vault[]. Returns coarse states: isLoading / isError / isEmpty.
 export function useVaults(owner?: Address) {
-  const factory = useReadContract({
-    abi: factoryAbi,
-    address: FACTORY_ADDRESS,
-    functionName: "getVaultsByOwner",
-    args: owner ? [owner] : undefined,
-    chainId: CHAIN_ID,
+  const factory = useReadContracts({
+    contracts: FACTORY_ADDRESSES.map((address) => ({
+      abi: factoryAbi,
+      address,
+      functionName: "getVaultsByOwner" as const,
+      args: [owner!] as const,
+      chainId: CHAIN_ID,
+    })),
     query: { enabled: !!owner },
   });
 
-  const addresses = useMemo(() => (factory.data as Address[] | undefined) ?? [], [factory.data]);
+  const addresses = useMemo(() => {
+    const out: Address[] = [];
+    for (const r of (factory.data as ReadResult[] | undefined) ?? []) {
+      if (r.status === "success") out.push(...(r.result as Address[]));
+    }
+    return out;
+  }, [factory.data]);
 
   const reads = useVaultReads(addresses);
 
+  // error only when no factory list could be read at all
+  const factoryFailed =
+    factory.isError ||
+    (!!factory.data && (factory.data as ReadResult[]).every((r) => r.status !== "success"));
+
   const isLoading = (!!owner && factory.isLoading) || reads.isLoading;
-  const isError = factory.isError || reads.isError;
+  const isError = factoryFailed || reads.isError;
   const error = factory.error ?? reads.error;
-  const isEmpty = !!owner && !factory.isLoading && !factory.isError && addresses.length === 0;
+  const isEmpty = !!owner && !factory.isLoading && !factoryFailed && addresses.length === 0;
 
   const refetch = useCallback(() => {
     factory.refetch();

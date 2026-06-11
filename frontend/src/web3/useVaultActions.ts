@@ -5,6 +5,7 @@ import type { Vault } from "../types";
 import type { CreateForm } from "../screens/CreateFlow";
 import { currentPenaltyPct, fmtNum } from "../lib/helpers";
 import { FACTORY_ADDRESS, erc20Abi, factoryAbi, vaultAbi } from "./contracts";
+import { useFactoryLimits } from "./useFactoryLimits";
 import { parseTxError, type SetTx, type ShareCast } from "./tx";
 
 type Hash = `0x${string}`;
@@ -13,8 +14,6 @@ type Step = { title: string; sub?: string; send: () => Promise<Hash> };
 type Flow = { steps: Step[]; success: { title: string; sub?: string; share?: ShareCast } };
 
 const DAY_SECONDS = 86_400;
-const MIN_LOCK_SEC = 7 * DAY_SECONDS;
-const MAX_LOCK_SEC = 1825 * DAY_SECONDS;
 /// Push a min-term unlock comfortably past the contract's MIN bound so it can't
 /// revert with UnlockTooSoon due to client clock skew / estimation latency.
 const UNLOCK_BUFFER_SEC = 600; // 10 min
@@ -32,6 +31,8 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  // live factory bounds (falls back to client constants if unreadable)
+  const { minLockDays, maxLockDays } = useFactoryLimits();
 
   const notReady = useCallback((): false => {
     setTx({
@@ -99,8 +100,8 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
         const asset = form.token.address;
         const amount = toUnits(form.amount, form.token.decimals);
         // Base the unlock on the chain clock (not the device) and clear the
-        // MIN/MAX bounds with a buffer — a 7-day lock was reverting with
-        // UnlockTooSoon when the device clock lagged the chain.
+        // factory's live MIN/MAX bounds with a buffer — a min-term lock was
+        // reverting with UnlockTooSoon when the device clock lagged the chain.
         let baseSec: number;
         try {
           baseSec = Number((await publicClient.getBlock()).timestamp);
@@ -108,9 +109,9 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
           baseSec = Math.floor(Date.now() / 1000);
         }
         let unlockSec = baseSec + form.days * DAY_SECONDS;
-        const minUnlock = baseSec + MIN_LOCK_SEC + UNLOCK_BUFFER_SEC;
+        const minUnlock = baseSec + minLockDays * DAY_SECONDS + UNLOCK_BUFFER_SEC;
         if (unlockSec < minUnlock) unlockSec = minUnlock;
-        const maxUnlock = baseSec + MAX_LOCK_SEC;
+        const maxUnlock = baseSec + maxLockDays * DAY_SECONDS;
         if (unlockSec > maxUnlock) unlockSec = maxUnlock;
         const unlock = BigInt(unlockSec);
         const soft = form.mode === "soft";
@@ -149,7 +150,7 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
         return false;
       }
     },
-    [address, publicClient, maybeApprove, writeContractAsync, runFlow, setTx, notReady],
+    [address, publicClient, maybeApprove, writeContractAsync, runFlow, setTx, notReady, minLockDays, maxLockDays],
   );
 
   const withdraw = useCallback(

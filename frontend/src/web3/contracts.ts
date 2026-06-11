@@ -16,11 +16,25 @@ export const CHAIN_ID = baseSepolia.id; // 84532
 export const FACTORY_ADDRESS = (import.meta.env.VITE_FACTORY_ADDRESS ??
   "0x89de426deF37Aa34c17f72d6a73229E64dd93e11") as Address;
 
+/// Previous factory deployments. Vaults created there stay readable on the
+/// dashboard after the active factory moves on (writes go to FACTORY_ADDRESS).
+/// Override / extend via comma-separated VITE_LEGACY_FACTORY_ADDRESSES.
+const LEGACY_DEFAULT = "0x89de426deF37Aa34c17f72d6a73229E64dd93e11";
+const legacyEnv = (import.meta.env.VITE_LEGACY_FACTORY_ADDRESSES ?? LEGACY_DEFAULT) as string;
+export const FACTORY_ADDRESSES: Address[] = [
+  FACTORY_ADDRESS,
+  ...(legacyEnv
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean) as Address[]),
+].filter((a, i, arr) => arr.findIndex((b) => b.toLowerCase() === a.toLowerCase()) === i);
+
 export const VAULT_IMPL_ADDRESS =
   "0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e" as Address;
 
-/// Protocol limits (mirror of Factory constants — for client-side validation).
-export const MIN_LOCK_DAYS = 7;
+/// Protocol limits — client-side fallbacks. The UI reads the live values from
+/// the factory (useFactoryLimits); these apply only when that read fails.
+export const MIN_LOCK_DAYS = 1;
 export const MAX_LOCK_DAYS = 1825; // 5 years
 export const MIN_USER_PENALTY_BPS = 500; // 5%
 export const ABS_MAX_PENALTY_BPS = 3000; // 30%

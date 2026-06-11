@@ -238,6 +238,34 @@ cast call $FACTORY "vaultCount()(uint256)" --rpc-url base_sepolia   # → 1
 
 ---
 
+## 9. Редеплой v2 — минимальный лок 1 день
+
+`MIN_LOCK_DURATION` снижен с 7 дней до 1 дня (constant → нужен новый
+Factory; Vault implementation не менялся, но скрипт деплоит свежую пару —
+это нормально). Существующие Vault'ы не затрагиваются: клоны автономны.
+
+```bash
+# тот же скрипт, что и в шаге 5 (Sourcify-верификация — как в шаге 7)
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url base_sepolia \
+  --account dh-deployer \
+  --broadcast \
+  -vvv
+```
+
+После деплоя:
+1. Запиши новые адреса в таблицу ниже (секция «v2»).
+2. **Vercel → Environment Variables:**
+   - `VITE_FACTORY_ADDRESS` = НОВЫЙ Factory (сюда идут createVault);
+   - `VITE_LEGACY_FACTORY_ADDRESSES` = `0x89de426deF37Aa34c17f72d6a73229E64dd93e11`
+     (старый — дашборд продолжит показывать созданные там Vault'ы).
+3. Redeploy фронтенда (env вшивается при сборке).
+
+Фронтенд читает `MIN_LOCK_DURATION` прямо с активной фабрики, так что
+копи/валидация («Min 1 day») подстроятся автоматически.
+
+---
+
 ## Адреса деплоя
 
 ### Base Sepolia (chainId 84532) — задеплоено 2026-06-04
@@ -253,6 +281,12 @@ cast call $FACTORY "vaultCount()(uint256)" --rpc-url base_sepolia   # → 1
   - https://sepolia.basescan.org/address/0x89de426deF37Aa34c17f72d6a73229E64dd93e11
 - Верификация: ✅ Sourcify (2026-06-04), оба контракта `Response: OK`.
   BaseScan отображает исходники по Sourcify-матчу.
+
+### Base Sepolia v2 (chainId 84532) — min lock 1 день
+- НЕ ЗАДЕПЛОЕНО (runbook: секция 9). После деплоя заполнить:
+  - DiamondHandsVault implementation: `0x…`
+  - DiamondHandsFactory v2: `0x…`
+  - Block / tx hashes / верификация
 
 ### Base Mainnet (chainId 8453)
 - НЕ ЗАДЕПЛОЕНО

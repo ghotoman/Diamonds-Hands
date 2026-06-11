@@ -78,10 +78,12 @@ export function cx(...a: Array<string | false | null | undefined>): string {
   return a.filter(Boolean).join(" ");
 }
 
-/// Lock-duration presets (days) shown on the term step.
+/// Lock-duration presets (days) shown on the term step. Presets below the
+/// factory's live minimum are disabled in the UI; longer terms go via the
+/// custom date picker.
 export const PRESETS = [
+  { label: "1d", days: 1 },
   { label: "7d", days: 7 },
   { label: "30d", days: 30 },
   { label: "90d", days: 90 },
-  { label: "1y", days: 365 },
 ];

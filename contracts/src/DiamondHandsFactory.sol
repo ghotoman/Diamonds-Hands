@@ -31,8 +31,8 @@ contract DiamondHandsFactory is Ownable2Step, Pausable, ReentrancyGuard {
     //                            CONSTANTS
     // -----------------------------------------------------------------
 
-    /// @notice Минимальный срок лока от момента createVault — 7 дней.
-    uint256 public constant MIN_LOCK_DURATION = 7 days;
+    /// @notice Минимальный срок лока от момента createVault — 1 день.
+    uint256 public constant MIN_LOCK_DURATION = 1 days;
 
     /// @notice Максимальный срок лока — 5 лет (1825 дней).
     uint256 public constant MAX_LOCK_DURATION = 1825 days;

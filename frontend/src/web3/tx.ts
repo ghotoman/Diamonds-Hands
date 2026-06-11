@@ -35,7 +35,7 @@ const ERROR_COPY: Record<string, Parsed> = {
   TopUpAfterUnlock: { kind: "generic", title: "Can't top up", message: "The lock is over — top-ups are closed." },
   ExtendAfterUnlock: { kind: "generic", title: "Can't extend", message: "The lock is over — it can't be extended." },
   ExtendMustIncrease: { kind: "generic", title: "Pick a later date", message: "The new term must be later than the current one." },
-  UnlockTooSoon: { kind: "generic", title: "Term too short", message: "The lock must be at least 7 days." },
+  UnlockTooSoon: { kind: "generic", title: "Term too short", message: "The unlock date is below this factory's minimum term. Pick a later date." },
   UnlockTooFar: { kind: "generic", title: "Term too long", message: "The lock can't exceed 5 years." },
   InvalidPenaltyForSoftMode: { kind: "generic", title: "Penalty out of range", message: "Soft-mode penalty must be between 5% and 30%." },
   InvalidPenaltyForHardMode: { kind: "generic", title: "Penalty not allowed", message: "Hard mode can't carry a penalty." },
