@@ -243,10 +243,10 @@ contract DiamondHandsFactoryTest is Test {
     }
 
     function test_CreateVault_RevertsOnUnlockTooSoon() public {
-        // less than MIN_LOCK_DURATION = 7 days
+        // less than MIN_LOCK_DURATION = 1 day
         vm.expectRevert();
         vm.prank(ALICE);
-        factory.createVault(address(token), DEFAULT_AMOUNT, block.timestamp + 6 days, true, 2000);
+        factory.createVault(address(token), DEFAULT_AMOUNT, block.timestamp + 12 hours, true, 2000);
     }
 
     function test_CreateVault_RevertsOnUnlockTooFar() public {

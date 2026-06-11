@@ -4,6 +4,7 @@ import type { Token, VaultMode } from "../types";
 import { cx, DAY, fmtNum, fmtUsd, PRESETS } from "../lib/helpers";
 import { MOCK_TOKENS } from "../lib/mock";
 import { useCustomToken } from "../web3/useTokens";
+import { useFactoryLimits } from "../web3/useFactoryLimits";
 import { Icon } from "../components/Icon";
 import { TokenBadge } from "../components/TokenBadge";
 import { ModeBadge } from "../components/Badge";
@@ -43,6 +44,8 @@ export function CreateFlow({
   const [mode, setMode] = useState<VaultMode | null>(null);
   const [penalty, setPenalty] = useState(15);
   const [query, setQuery] = useState("");
+  // live lock-term bounds of the active factory (fallback constants offline)
+  const { minLockDays, maxLockDays } = useFactoryLimits();
 
   const t = token;
   const amt = parseFloat(amount) || 0;
@@ -54,7 +57,7 @@ export function CreateFlow({
   const canNext =
     (step === 1 && !!token) ||
     (step === 2 && amt > 0 && !overBalance) ||
-    (step === 3 && days >= 7) ||
+    (step === 3 && days >= minLockDays && days <= maxLockDays) ||
     (step === 4 && (mode === "hard" || mode === "soft")) ||
     step === 5;
 
@@ -107,7 +110,16 @@ export function CreateFlow({
           />
         )}
         {step === 2 && t && <StepAmount t={t} amount={amount} setAmount={setAmount} amt={amt} over={overBalance} needsApprove={needsApprove} />}
-        {step === 3 && <StepTerm days={days} setDays={setDays} customDate={customDate} setCustomDate={setCustomDate} />}
+        {step === 3 && (
+          <StepTerm
+            days={days}
+            setDays={setDays}
+            customDate={customDate}
+            setCustomDate={setCustomDate}
+            minDays={minLockDays}
+            maxDays={maxLockDays}
+          />
+        )}
         {step === 4 && <StepMode mode={mode} setMode={setMode} penalty={penalty} setPenalty={setPenalty} />}
         {step === 5 && t && mode && <StepConfirm t={t} amt={amt} days={days} mode={mode} penalty={penalty} needsApprove={needsApprove} />}
       </div>
@@ -321,31 +333,43 @@ function StepTerm({
   setDays,
   customDate,
   setCustomDate,
+  minDays,
+  maxDays,
 }: {
   days: number;
   setDays: (d: number) => void;
   customDate: string;
   setCustomDate: (s: string) => void;
+  minDays: number;
+  maxDays: number;
 }) {
   const unlockDate = new Date(Date.now() + days * DAY);
+  const minLabel = minDays === 1 ? "1 day" : `${minDays} days`;
   return (
     <div>
       <div className="grid grid-cols-4 gap-2">
-        {PRESETS.map((p) => (
-          <button
-            key={p.days}
-            onClick={() => {
-              setDays(p.days);
-              setCustomDate("");
-            }}
-            className={cx(
-              "h-14 rounded-xl text-[15px] font-bold transition active:scale-95",
-              days === p.days && !customDate ? "bg-baseblue text-white shadow-cta" : "bg-surface border border-line text-ink",
-            )}
-          >
-            {p.label}
-          </button>
-        ))}
+        {PRESETS.map((p) => {
+          const tooShort = p.days < minDays;
+          return (
+            <button
+              key={p.days}
+              disabled={tooShort}
+              onClick={() => {
+                setDays(p.days);
+                setCustomDate("");
+              }}
+              className={cx(
+                "h-14 rounded-xl text-[15px] font-bold transition active:scale-95",
+                days === p.days && !customDate
+                  ? "bg-baseblue text-white shadow-cta"
+                  : "bg-surface border border-line text-ink",
+                tooShort && "opacity-40 pointer-events-none",
+              )}
+            >
+              {p.label}
+            </button>
+          );
+        })}
       </div>
       <div className="mt-4">
         <Label className="mb-2">Or a custom date</Label>
@@ -354,12 +378,12 @@ function StepTerm({
           <input
             type="date"
             value={customDate}
-            min={new Date(Date.now() + 7 * DAY).toISOString().slice(0, 10)}
-            max={new Date(Date.now() + 5 * 365 * DAY).toISOString().slice(0, 10)}
+            min={new Date(Date.now() + minDays * DAY).toISOString().slice(0, 10)}
+            max={new Date(Date.now() + maxDays * DAY).toISOString().slice(0, 10)}
             onChange={(e) => {
               setCustomDate(e.target.value);
               const d = Math.round((new Date(e.target.value).getTime() - Date.now()) / DAY);
-              if (d >= 7) setDays(d);
+              if (d >= minDays) setDays(d);
             }}
             className="flex-1 bg-transparent outline-none text-[15px] text-ink"
           />
@@ -372,7 +396,7 @@ function StepTerm({
         </div>
         <div className="mt-1 text-[14px] text-baseblue font-semibold">in {days} {days === 1 ? "day" : "days"}</div>
       </div>
-      <div className="mt-3 text-center text-[12px] text-sub">Min 7 days · max 5 years</div>
+      <div className="mt-3 text-center text-[12px] text-sub">Min {minLabel} · max 5 years</div>
     </div>
   );
 }

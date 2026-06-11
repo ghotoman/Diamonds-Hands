@@ -52,12 +52,13 @@ Notes accumulated while porting the design prototype to a production Vite app.
 
 ## Known gaps vs prototype (need contract/indexer support)
 
-- **Check-in streak count.** The prototype shows "N check-ins in a row" +
-  last-check-in state. On-chain `checkIn()` only emits a `CheckedIn` event;
-  the contract does not store a counter. The streak therefore needs an
-  off-chain indexer (events). For V1 the check-in **button/action** is wired,
-  but the streak count/"checked today" state requires event indexing — shown
-  as a simplified state until an indexer exists.
+- **Check-in streak count — ✅ solved (client-side indexer).** On-chain
+  `checkIn()` only emits a `CheckedIn` event; `web3/useVaultEvents.ts` reads
+  those via `eth_getLogs` with an adaptive probe (whole window → 9000 → 1900
+  → 450 blocks) so it works across providers with different range caps, then
+  derives the streak (consecutive UTC days ending today/yesterday). When the
+  RPC can't serve logs at all the UI says "Streak unavailable" instead of a
+  false "0". Verified live on Base Sepolia and end-to-end against anvil.
 
 - **USD valuation.** No on-chain price oracle in V1. `token.price` is optional;
   USD figures are shown only when a price is available (otherwise hidden /

@@ -23,7 +23,7 @@ library Errors {
     ///      (createVault.amount, topUp.addAmount).
     error AmountZero();
 
-    /// @dev Срок лока меньше MIN_LOCK_DURATION (7 дней).
+    /// @dev Срок лока меньше MIN_LOCK_DURATION (1 день).
     ///      `minUnlock` — минимальный допустимый unlockTimestamp.
     error UnlockTooSoon(uint256 minUnlock);
 
