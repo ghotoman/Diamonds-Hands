@@ -49,6 +49,7 @@ src/
     useVaults.ts       reads: getVaultsByOwner → multicall vault + asset meta
     useTokens.ts       create picker: known tokens + live balances
     useVaultActions.ts writes: create/withdraw/emergency/topUp/extend/checkIn
+    useVaultEvents.ts  check-in streak: adaptive getLogs scan of CheckedIn events
     tx.ts              tx overlay types + parseTxError (friendly error copy)
   screens/             Dashboard, CreateFlow (5-step), VaultDetail (+ modals)
   components/          Button, Icon, Modal, ProgressBar, ErrorBoundary, …
