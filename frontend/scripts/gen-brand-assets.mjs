@@ -10,37 +10,33 @@ import { resolve } from "node:path";
 const CHROME = process.env.CHROME_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const OUT = (f) => resolve("public", f);
 
-/// The gem mark — a faceted brilliant-cut diamond (flat style, brand blues).
-/// Crown (table + side facets) over a pavilion converging to the culet;
-/// light reads from the top-left. `s` = svg width in px.
+/// The gem mark. `s` = body side in px (the rotated square), `r` = corner
+/// radius, `stroke` = inner white stroke width — proportions match Logo.tsx.
 const gem = (s, { glow = true } = {}) => `
-  <div style="position:relative; width:${s * 1.5}px; height:${s * 1.4}px; display:grid; place-items:center;">
+  <div style="position:relative; width:${s * 1.5}px; height:${s * 1.5}px; display:grid; place-items:center;">
     ${
       glow
-        ? `<div style="position:absolute; inset:-10%; background:radial-gradient(circle at 50% 44%, rgba(61,61,255,.40), rgba(61,61,255,.13) 44%, transparent 70%);"></div>`
+        ? `<div style="position:absolute; inset:-12%; background:radial-gradient(circle at 50% 46%, rgba(61,61,255,.42), rgba(61,61,255,.14) 42%, transparent 68%);"></div>`
         : ""
     }
-    <svg width="${s}" height="${Math.round(s * 0.92)}" viewBox="0 0 100 92"
-         style="position:relative; filter: drop-shadow(0 ${s * 0.02}px ${s * 0.06}px rgba(0,0,60,.55)) drop-shadow(0 0 ${s * 0.10}px rgba(61,61,255,.45));">
-      <!-- crown -->
-      <polygon points="30,8 70,8 65,34 35,34" fill="#7B7BFF"/>
-      <polygon points="30,8 35,34 4,34"  fill="#5050FF"/>
-      <polygon points="70,8 96,34 65,34" fill="#3636F0"/>
-      <!-- pavilion -->
-      <polygon points="4,34 35,34 50,88"  fill="#2D2DE0"/>
-      <polygon points="35,34 65,34 50,88" fill="#4A4AFF"/>
-      <polygon points="65,34 96,34 50,88" fill="#1D1DC4"/>
-      <!-- table shine -->
-      <polygon points="33,10 50,10 39,31" fill="rgba(255,255,255,.30)"/>
-      <!-- facet edges -->
-      <g stroke="rgba(255,255,255,.30)" stroke-width="1" stroke-linejoin="round" fill="none">
-        <polygon points="30,8 70,8 96,34 50,88 4,34"/>
-        <path d="M4,34 H96 M30,8 L35,34 M70,8 L65,34 M35,34 L50,88 M65,34 L50,88"/>
-      </g>
-      <!-- sparkles -->
-      <path d="M27 16 l1.6 4.4 4.4 1.6 -4.4 1.6 -1.6 4.4 -1.6 -4.4 -4.4 -1.6 4.4 -1.6 Z" fill="#fff" opacity=".95"/>
-      <path d="M76 47 l1.1 3 3 1.1 -3 1.1 -1.1 3 -1.1 -3 -3 -1.1 3 -1.1 Z" fill="#fff" opacity=".75"/>
-    </svg>
+    <div style="
+      width:${s}px; height:${s}px;
+      transform: rotate(45deg);
+      border-radius:${Math.round(s * 0.25)}px;
+      background: linear-gradient(135deg, #3D3DFF, #0000FF);
+      box-shadow:
+        inset 0 0 0 ${Math.max(3, Math.round(s * 0.018))}px rgba(255,255,255,.32),
+        inset ${Math.round(s * 0.05)}px ${Math.round(s * 0.05)}px ${Math.round(s * 0.22)}px rgba(255,255,255,.13),
+        inset ${-Math.round(s * 0.06)}px ${-Math.round(s * 0.06)}px ${Math.round(s * 0.25)}px rgba(0,0,90,.45),
+        0 ${Math.round(s * 0.06)}px ${Math.round(s * 0.16)}px rgba(0,0,40,.45);
+      position:relative; overflow:hidden;
+    ">
+      <div style="position:absolute; inset:0;
+        background: linear-gradient(115deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,.06) 26%, transparent 44%);"></div>
+      <div style="position:absolute; left:-22%; top:-46%; width:70%; height:200%;
+        transform: rotate(18deg);
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.10), transparent);"></div>
+    </div>
   </div>`;
 
 const FONT = `-apple-system, 'Segoe UI', 'Inter', Roboto, Helvetica, Arial, sans-serif`;
