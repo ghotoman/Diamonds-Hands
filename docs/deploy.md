@@ -293,7 +293,8 @@ forge script script/Deploy.s.sol:Deploy \
 - Explorer:
   - https://sepolia.basescan.org/address/0xD41FA9D180187C79E220A1C5968Da8E145646f07
   - https://sepolia.basescan.org/address/0xE0a0836f19d604e3aEEf1c55a59e50e1cE806cC3
-- Верификация: ⏳ Sourcify (шаг 7: `forge verify-contract <addr> <contract> --verifier sourcify`)
+- Верификация: ✅ Sourcify (2026-06-11), оба контракта верифицированы.
+  BaseScan отображает исходники по Sourcify-матчу.
 
 ### Base Mainnet (chainId 8453)
 - НЕ ЗАДЕПЛОЕНО

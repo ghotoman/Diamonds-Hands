@@ -90,8 +90,9 @@ use an `__APP_URL__` token that `vite.config.ts` fills **at build time** from:
 Netlify (`URL` / `DEPLOY_PRIME_URL`).
 
 On Vercel/Netlify it's auto-detected; for other hosts set `VITE_APP_URL` to the
-canonical `https://…` origin. Placeholder icons live in `public/` — regenerate
-with `node scripts/gen-placeholder-icons.mjs`; replace with real art for launch.
+canonical `https://…` origin. Brand assets (`icon` / `splash` / `embed` 3:2 /
+`og`) live in `public/` — regenerate with `node scripts/gen-brand-assets.mjs`
+(renders the gem + cards in headless Chromium; set `CHROME_PATH` if needed).
 
 ## Base App (Mini App)
 
