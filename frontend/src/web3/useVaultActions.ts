@@ -5,6 +5,7 @@ import type { Vault } from "../types";
 import type { CreateForm } from "../screens/CreateFlow";
 import { currentPenaltyPct, fmtNum } from "../lib/helpers";
 import { FACTORY_ADDRESS, erc20Abi, factoryAbi, vaultAbi } from "./contracts";
+import { DATA_SUFFIX } from "./attribution";
 import { useFactoryLimits } from "./useFactoryLimits";
 import { parseTxError, type SetTx, type ShareCast } from "./tx";
 
@@ -87,7 +88,7 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
       return {
         title: `Approve access to ${sym}`,
         sub: "Confirm the approve in your wallet",
-        send: () => writeContractAsync({ address: token, abi: erc20Abi, functionName: "approve", args: [spender, need] }),
+        send: () => writeContractAsync({ address: token, abi: erc20Abi, functionName: "approve", args: [spender, need], dataSuffix: DATA_SUFFIX }),
       };
     },
     [publicClient, address, writeContractAsync],
@@ -129,6 +130,7 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
               abi: factoryAbi,
               functionName: "createVault",
               args: [asset, amount, unlock, soft, maxPenaltyBps],
+              dataSuffix: DATA_SUFFIX,
             }),
         });
 
@@ -160,7 +162,7 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
           {
             title: "Confirm withdrawal",
             sub: "Sign the withdrawal in your wallet",
-            send: () => writeContractAsync({ address: v.address, abi: vaultAbi, functionName: "withdraw" }),
+            send: () => writeContractAsync({ address: v.address, abi: vaultAbi, functionName: "withdraw", dataSuffix: DATA_SUFFIX }),
           },
         ],
         success: { title: "Withdrawn ✓", sub: `${fmtNum(v.amount)} ${v.token.sym} in your wallet` },
@@ -177,7 +179,7 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
           {
             title: "Confirm early exit",
             sub: "Sign the penalized transaction",
-            send: () => writeContractAsync({ address: v.address, abi: vaultAbi, functionName: "emergencyWithdraw" }),
+            send: () => writeContractAsync({ address: v.address, abi: vaultAbi, functionName: "emergencyWithdraw", dataSuffix: DATA_SUFFIX }),
           },
         ],
         success: { title: "Exit done", sub: `Received ~${fmtNum(receive)} ${v.token.sym} (penalty ${pen.toFixed(1)}%)` },
@@ -197,7 +199,7 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
         steps.push({
           title: "Confirm top-up",
           sub: "Sign in your wallet",
-          send: () => writeContractAsync({ address: v.address, abi: vaultAbi, functionName: "topUp", args: [add] }),
+          send: () => writeContractAsync({ address: v.address, abi: vaultAbi, functionName: "topUp", args: [add], dataSuffix: DATA_SUFFIX }),
         });
         return runFlow({ steps, success: { title: "Topped up ✓", sub: `+${fmtNum(num)} ${v.token.sym} in the vault` } });
       } catch (err) {
@@ -217,7 +219,7 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
           {
             title: "Confirm extension",
             sub: "Sign in your wallet",
-            send: () => writeContractAsync({ address: v.address, abi: vaultAbi, functionName: "extendLock", args: [newUnlock] }),
+            send: () => writeContractAsync({ address: v.address, abi: vaultAbi, functionName: "extendLock", args: [newUnlock], dataSuffix: DATA_SUFFIX }),
           },
         ],
         success: { title: "Term extended ✓", sub: `+${days} days added` },
@@ -233,7 +235,7 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
           {
             title: "Daily check-in",
             sub: "Sign the check-in in your wallet",
-            send: () => writeContractAsync({ address: v.address, abi: vaultAbi, functionName: "checkIn" }),
+            send: () => writeContractAsync({ address: v.address, abi: vaultAbi, functionName: "checkIn", dataSuffix: DATA_SUFFIX }),
           },
         ],
         success: { title: "Checked in ✓", sub: "Your streak is recorded on-chain" },
