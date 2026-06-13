@@ -39,7 +39,7 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
     setTx({
       stage: "error",
       title: "Wallet not ready",
-      error: "Connect your wallet on Base Sepolia and try again.",
+      error: "Connect your wallet on the right network and try again.",
       errorKind: "generic",
     });
     return false;

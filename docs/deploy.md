@@ -238,7 +238,7 @@ cast call $FACTORY "vaultCount()(uint256)" --rpc-url base_sepolia   # → 1
 
 ---
 
-## 9. Редеплой v2 — минимальный лок 1 день
+## 10. Редеплой Sepolia v2 — минимальный лок 1 день
 
 `MIN_LOCK_DURATION` снижен с 7 дней до 1 дня (constant → нужен новый
 Factory; Vault implementation не менялся, но скрипт деплоит свежую пару —
@@ -263,6 +263,160 @@ forge script script/Deploy.s.sol:Deploy \
 
 Фронтенд читает `MIN_LOCK_DURATION` прямо с активной фабрики, так что
 копи/валидация («Min 1 day») подстроятся автоматически.
+
+---
+
+## 11. Mainnet-деплой (Base mainnet, chainId 8453)
+
+Полный гайд для боевого деплоя с **multisig + timelock**. Использует
+`script/DeployMainnet.s.sol` (юнит-тесты: `forge test --match-contract
+DeployMainnetTest`). 8 тестов покрывают: preconditions, передача владения
+без timelock, передача владения через timelock, и невозможность обойти
+timelock при `setImplementation`.
+
+### 11.1. Предусловия (один раз перед mainnet-деплоем)
+
+1. **Внешний аудит** контрактов (Spearbit / Cantina / Code4rena / Sherlock-
+   конкурс) — отдельный шаг, не покрывается этим runbook. Внутренний
+   обзор лежит в `docs/security-audit.md`.
+2. **Mainnet Safe (multisig)** уже задеплоен и протестирован: <https://app.safe.global/>
+   — рекомендую threshold ≥ 2/3. Запиши его адрес.
+3. **Аппаратный кошелёк** (Ledger) для deployer-роли — она нужна только
+   для оплаты газа и сразу отдаёт владение через `transferOwnership`.
+   Mainnet-RPC деплоера (Alchemy / Infura / QuickNode).
+4. **`feeReceiver`** — публичный адрес, на который пойдут штрафы soft-
+   режима. Снапшотится в каждый Vault на момент создания — необратимо.
+   Рекомендую отдельный multisig (treasury).
+
+### 11.2. Подготовка `.env`
+
+```bash
+# contracts/.env (НЕ коммитить)
+FEE_RECEIVER=0x...           # treasury / fee multisig
+OWNER_MULTISIG=0x...         # Safe — будущий владелец Factory (через timelock)
+USE_TIMELOCK=true            # default; см. ниже опцию false
+TIMELOCK_DELAY_SEC=172800    # 48h (default). Минимум: 86400 (24h)
+```
+
+> **`USE_TIMELOCK=false`** допустимо, но снижает безопасность: смена
+> `implementation` для будущих вольтов происходит мгновенно по подписи
+> multisig'а. С timelock у юзеров есть `TIMELOCK_DELAY_SEC` времени увидеть
+> и (при желании) вывести средства до смены логики.
+
+### 11.3. Симуляция (без broadcast)
+
+```bash
+forge script script/DeployMainnet.s.sol:DeployMainnet \
+  --rpc-url base_mainnet -vvv
+```
+
+Покажет, какие адреса задеплоятся, и проверит preconditions. **Никаких
+транзакций не отправляется.**
+
+### 11.4. Деплой (broadcast + Ledger)
+
+```bash
+forge script script/DeployMainnet.s.sol:DeployMainnet \
+  --rpc-url base_mainnet \
+  --ledger \
+  --sender 0xYOUR_LEDGER_ADDRESS \
+  --broadcast \
+  -vvv
+```
+
+Если используешь зашифрованный keystore вместо Ledger — `--account <name>
+--sender 0x...` (как при тестнет-деплое).
+
+После успешного `ONCHAIN EXECUTION COMPLETE & SUCCESSFUL` запиши из
+вывода:
+- `Vault implementation` (immutable, нужен для будущих вольтов);
+- `Factory` (твой ACTIVE mainnet-факторий);
+- `Timelock` (если `USE_TIMELOCK=true`);
+- `Pending owner` — должен совпадать с Timelock или Multisig.
+
+### 11.5. Принятие владения (acceptOwnership)
+
+Owner Factory сейчас — **deployer EOA** (или Ledger). Pending owner —
+Timelock (или Multisig, если без timelock). До приёма владения deployer
+формально ещё owner, но **уже не может ничего сделать**: ownership
+эффективно передан в момент acceptOwnership.
+
+**С timelock** (`USE_TIMELOCK=true`):
+
+1. Из Safe → New transaction → Contract interaction → адрес **Timelock**.
+   Метод `schedule(target, value, data, predecessor, salt, delay)`:
+   - `target` = адрес Factory;
+   - `value` = 0;
+   - `data` = `0x79ba5097` (селектор `acceptOwnership()`);
+   - `predecessor` = `0x000…000`;
+   - `salt` = `0x000…001` (любой уникальный bytes32);
+   - `delay` = `172800` (или твой `TIMELOCK_DELAY_SEC`).
+2. Подождать `delay` секунд.
+3. Из Safe → метод `execute(target, value, data, predecessor, salt)` с
+   теми же параметрами (без `delay`). После него `Factory.owner() ==
+   Timelock`.
+
+**Без timelock** (`USE_TIMELOCK=false`):
+
+Из Safe вызови `acceptOwnership()` на Factory — одной транзакцией.
+
+### 11.6. Верификация исходников
+
+```bash
+IMPL=0x...    # из вывода 11.4
+FACTORY=0x...
+FEE=0x...
+TIMELOCK=0x...  # если USE_TIMELOCK=true
+
+# Sourcify (keyless)
+forge verify-contract "$IMPL" src/DiamondHandsVault.sol:DiamondHandsVault \
+  --chain 8453 --verifier sourcify
+
+forge verify-contract "$FACTORY" src/DiamondHandsFactory.sol:DiamondHandsFactory \
+  --chain 8453 --verifier sourcify \
+  --constructor-args $(cast abi-encode "constructor(address,address)" "$IMPL" "$FEE")
+
+# TimelockController — стандартный OZ-контракт, для красивого листинга
+# на BaseScan лучше верифицировать и его. Конструктор:
+# constructor(uint256 minDelay, address[] proposers, address[] executors, address admin)
+# proposers/executors = [OWNER_MULTISIG], admin = 0x0
+forge verify-contract "$TIMELOCK" \
+  lib/openzeppelin-contracts/contracts/governance/TimelockController.sol:TimelockController \
+  --chain 8453 --verifier sourcify \
+  --constructor-args $(cast abi-encode \
+     "constructor(uint256,address[],address[],address)" \
+     172800 "[$OWNER_MULTISIG]" "[$OWNER_MULTISIG]" "0x0000000000000000000000000000000000000000")
+```
+
+### 11.7. Включение фронта на mainnet
+
+В Vercel → Settings → Environment Variables:
+
+| Key | Value |
+| --- | --- |
+| `VITE_USE_TESTNET` | **удалить или не задавать** (mainnet — default) |
+| `VITE_FACTORY_ADDRESS` | удалить (дефолт берётся из кода после правки `contracts.ts`) |
+| `VITE_LEGACY_FACTORY_ADDRESSES` | удалить (по умолчанию у mainnet `[]`) |
+| `VITE_BASE_RPC_URL` | приватный mainnet-RPC (Alchemy / Infura) |
+| `VITE_BASE_SEPOLIA_RPC_URL` | можно удалить |
+
+Затем впиши новые адреса в `MAINNET` в `frontend/src/web3/contracts.ts`
+(см. TODO там), закоммить, мерж → Vercel автоматом передеплоит на чистый
+mainnet-билд. **Обязательно проверь манифест после редеплоя:**
+`/.well-known/farcaster.json` — `homeUrl` должен указывать на твой домен.
+
+### 11.8. Постдеплой-чеклист
+
+- [ ] `Factory.owner()` == Timelock (или Multisig если без timelock).
+- [ ] `Factory.pendingOwner()` == `0x0`.
+- [ ] `Factory.implementation()` == адрес impl из вывода.
+- [ ] `Factory.feeReceiver()` == ожидаемый адрес.
+- [ ] Тестовая транзакция: создай 1 minimal-сумма вольт через фронт.
+- [ ] Builder Code dataSuffix виден в transaction calldata (последние 16
+      байт; на BaseScan вкладка Input Data).
+- [ ] Мониторинг событий: `VaultCreated`, `Paused`, `ImplementationUpdated`,
+      `OwnershipTransferStarted`, `OwnershipTransferred` — рекомендую
+      Tenderly Alerts или OpenZeppelin Defender.
 
 ---
 
@@ -297,4 +451,11 @@ forge script script/Deploy.s.sol:Deploy \
   BaseScan отображает исходники по Sourcify-матчу.
 
 ### Base Mainnet (chainId 8453)
-- НЕ ЗАДЕПЛОЕНО
+- НЕ ЗАДЕПЛОЕНО (runbook: секция 11). После деплоя заполнить:
+  - DiamondHandsVault implementation: `0x…`
+  - DiamondHandsFactory: `0x…`
+  - TimelockController (если `USE_TIMELOCK=true`): `0x…`
+  - Owner multisig (Safe): `0x…`
+  - Fee receiver: `0x…`
+  - Timelock delay: `…h`
+  - Block / tx hashes / верификация
