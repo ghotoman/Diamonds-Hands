@@ -50,6 +50,7 @@ src/
     useTokens.ts       create picker: known tokens + live balances
     useVaultActions.ts writes: create/withdraw/emergency/topUp/extend/checkIn
     useVaultEvents.ts  check-in streak: adaptive getLogs scan of CheckedIn events
+    attribution.ts     Base Builder Code dataSuffix (keccak16 of the origin)
     tx.ts              tx overlay types + parseTxError (friendly error copy)
   screens/             Dashboard, CreateFlow (5-step), VaultDetail (+ modals)
   components/          Button, Icon, Modal, ProgressBar, ErrorBoundary, …

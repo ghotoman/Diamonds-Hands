@@ -1,10 +1,5 @@
 {
-  "_comment": "Base App / Farcaster Mini App manifest. __APP_URL__ is filled at build time from VITE_APP_URL (or the host URL on Vercel/Netlify). Generate accountAssociation via the Base/Warpcast manifest tool for the same domain before publishing.",
-  "accountAssociation": {
-    "header": "",
-    "payload": "",
-    "signature": ""
-  },
+  "_comment": "Base App / Farcaster Mini App manifest. __APP_URL__ is filled at build time from VITE_APP_URL (or the host URL on Vercel/Netlify). Base App discovery is handled via the base:app_id meta tag (index.html). accountAssociation is optional and only needed for native Farcaster/Warpcast verification — generate it with the Farcaster manifest tool for this domain and add it back here if you want that.",
   "miniapp": {
     "version": "1",
     "name": "Diamond Hands",
@@ -14,6 +9,8 @@
     "homeUrl": "__APP_URL__",
     "splashImageUrl": "__APP_URL__/splash.png",
     "splashBackgroundColor": "#0b1120",
+    "heroImageUrl": "__APP_URL__/embed.png",
+    "ogImageUrl": "__APP_URL__/og.png",
     "primaryCategory": "finance",
     "tags": ["defi", "base", "hodl", "lock", "erc20"]
   }
