@@ -1,0 +1,20 @@
+{
+  "name": "diamond-hands-monitoring",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Off-chain TVL guardrail for the Diamond Hands soft-launch: sums value locked across all vaults and alerts (so the multisig can pause) when TVL approaches the cap.",
+  "scripts": {
+    "monitor": "tsx src/monitor.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

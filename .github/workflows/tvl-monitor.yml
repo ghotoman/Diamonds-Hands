@@ -1,0 +1,64 @@
+name: TVL Monitor
+
+# Off-chain TVL guardrail для soft-launch (см. monitoring/README.md).
+# OPT-IN: scheduled-прогон выполняется ТОЛЬКО если задана repo-переменная
+# TVL_MONITOR_ENABLED=true (Settings → Secrets and variables → Actions →
+# Variables). Иначе job скипается без расхода раннер-минут. Ручной запуск
+# (workflow_dispatch) работает всегда.
+#
+# ⚠️ Cron в GitHub Actions НЕ realtime: прогоны могут задерживаться на
+# 5–30 мин. Для настоящего $1M-гардрейла гоняй monitoring/ на отдельном
+# 1-минутном cron / always-on воркере (этот workflow — базовый минимум).
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # каждые 30 мин (с поправкой на задержки GHA)
+  workflow_dispatch:
+
+concurrency:
+  group: tvl-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    name: Check TVL vs cap
+    # Scheduled: только при TVL_MONITOR_ENABLED=true. Ручной запуск — всегда.
+    if: github.event_name == 'workflow_dispatch' || vars.TVL_MONITOR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: monitoring
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: monitoring/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Guard — required secrets present
+        run: |
+          if [ -z "${BASE_RPC_URL}" ] || [ -z "${FACTORY_ADDRESSES}" ]; then
+            echo "::warning::TVL monitor not configured (BASE_RPC_URL / FACTORY_ADDRESSES secrets missing). Skipping."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+        env:
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          FACTORY_ADDRESSES: ${{ secrets.FACTORY_ADDRESSES }}
+
+      - name: Run monitor
+        if: env.SKIP != '1'
+        run: npm run monitor
+        env:
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          FACTORY_ADDRESSES: ${{ secrets.FACTORY_ADDRESSES }}
+          START_BLOCK: ${{ secrets.START_BLOCK }}
+          THRESHOLD_USD: ${{ vars.THRESHOLD_USD }}
+          WARN_RATIO: ${{ vars.WARN_RATIO }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}

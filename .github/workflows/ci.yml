@@ -83,6 +83,35 @@ jobs:
       - name: Build (tsc -b + vite build)
         run: npm run build
 
+  # TVL-монитор (off-chain guardrail): typecheck + unit-тесты чистой
+  # TVL-математики. Сетевые вызовы здесь не гоняются (нужен Base RPC).
+  monitoring:
+    name: Monitoring (typecheck, test)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: monitoring
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: monitoring/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Unit tests (TVL math)
+        run: npm test
+
   # Тяжёлый invariant-сьют (~7 мин): по расписанию (ежедневно на main)
   # и по ручному запросу. НЕ блокирует обычные push/PR.
   invariant:
