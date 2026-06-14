@@ -1,5 +1,6 @@
 import type { Address } from "viem";
 import type { Token } from "../types";
+import { WETH_ADDRESS } from "./contracts";
 
 /// Known tokens by address (lowercased). Resolves a vault's `asset` to a
 /// nice {sym,name,color,decimals}. Unknown tokens fall back to on-chain
@@ -7,8 +8,7 @@ import type { Token } from "../types";
 type KnownMeta = { sym: string; name: string; color: string; decimals: number };
 
 const KNOWN: Record<string, KnownMeta> = {
-  // Base Sepolia WETH
-  "0x4200000000000000000000000000000000000006": {
+  [WETH_ADDRESS.toLowerCase()]: {
     sym: "WETH",
     name: "Wrapped Ether",
     color: "#627EEA",

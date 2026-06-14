@@ -226,7 +226,7 @@ function StepToken({
           ) : (
             <div className="flex gap-2 rounded-xl bg-[#E11D4808] border border-[#E11D4833] p-3 text-[13px] text-danger">
               <Icon name="info" size={16} className="shrink-0 mt-0.5" />
-              <span>No ERC-20 found at this address on Base Sepolia. Check the address and the network.</span>
+              <span>No ERC-20 found at this address on this network. Check the address and the network.</span>
             </div>
           )}
         </div>
@@ -248,8 +248,8 @@ function StepToken({
         <span>
           {allowCustom ? (
             <>
-              Paste any <b className="text-ink">ERC-20 contract address</b> on Base Sepolia to lock it. Want ETH? Wrap
-              to <b className="text-ink">WETH</b> first.
+              Paste any <b className="text-ink">ERC-20 contract address</b> to lock it. Want ETH? Wrap to{" "}
+              <b className="text-ink">WETH</b> first.
             </>
           ) : (
             <>

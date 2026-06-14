@@ -6,7 +6,7 @@ import type { Vault } from "./types";
 import { DAY, fmtNum, currentPenaltyPct, shortAddr } from "./lib/helpers";
 import { useTick } from "./lib/useTick";
 import { MOCK_VAULTS, MOCK_TOKENS } from "./lib/mock";
-import { CHAIN_ID, explorerTx } from "./web3/contracts";
+import { CHAIN_ID, TARGET_CHAIN, explorerTx } from "./web3/contracts";
 import { FARCASTER_CONNECTOR_ID } from "./web3/config";
 import { useVaults } from "./web3/useVaults";
 import { useTokens } from "./web3/useTokens";
@@ -153,6 +153,7 @@ function ConnectGate({ onConnect, connecting }: { onConnect: () => void; connect
 }
 
 function SwitchPrompt({ onSwitch, switching }: { onSwitch: () => void; switching: boolean }) {
+  const name = TARGET_CHAIN.name;
   return (
     <div className="px-6 pt-10 pb-32">
       <div className="rounded-2xl bg-surface border border-line p-8 text-center">
@@ -161,11 +162,11 @@ function SwitchPrompt({ onSwitch, switching }: { onSwitch: () => void; switching
         </div>
         <h1 className="text-[22px] font-bold text-ink leading-tight">Wrong network</h1>
         <p className="mt-2 text-[15px] text-sub leading-relaxed text-balance">
-          Diamond Hands runs on Base Sepolia. Switch your wallet to continue.
+          Diamond Hands runs on {name}. Switch your wallet to continue.
         </p>
         <Button className="w-full mt-6" loading={switching} onClick={onSwitch}>
           <Icon name="refresh" size={18} />
-          Switch to Base Sepolia
+          Switch to {name}
         </Button>
       </div>
     </div>

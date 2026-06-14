@@ -238,7 +238,7 @@ cast call $FACTORY "vaultCount()(uint256)" --rpc-url base_sepolia   # → 1
 
 ---
 
-## 9. Редеплой v2 — минимальный лок 1 день
+## 10. Редеплой Sepolia v2 — минимальный лок 1 день
 
 `MIN_LOCK_DURATION` снижен с 7 дней до 1 дня (constant → нужен новый
 Factory; Vault implementation не менялся, но скрипт деплоит свежую пару —
@@ -263,6 +263,215 @@ forge script script/Deploy.s.sol:Deploy \
 
 Фронтенд читает `MIN_LOCK_DURATION` прямо с активной фабрики, так что
 копи/валидация («Min 1 day») подстроятся автоматически.
+
+---
+
+## 11. Mainnet-деплой (Base mainnet, chainId 8453)
+
+Полный гайд для боевого деплоя. Использует `script/DeployMainnet.s.sol`
+(юнит-тесты: `forge test --match-contract DeployMainnetTest`). 8 тестов
+покрывают: preconditions, передачу владения без timelock, передачу через
+timelock, и невозможность обойти timelock при `setImplementation`.
+
+> ### 🅰️ Выбранный профиль запуска (soft-launch)
+> - **Owner = multisig напрямую** (`USE_TIMELOCK=false`). Причина: для
+>   unaudited-старта критичен **мгновенный** `pause()` (стоп-кран). Если бы
+>   Factory принадлежал таймлоку, `pause()` (он `onlyOwner`) тоже уходил бы
+>   в задержку 48ч — недопустимо в аварии. Таймлок добавим позже (после
+>   аудита/роста) — переносом владения на TimelockController.
+> - **TVL-кап $1M = off-chain мониторинг + `pause()`** (см. `monitoring/` и
+>   §11.8). On-chain капа нет: вольты принимают любой ERC-20, а универсального
+>   USD-оракула on-chain не существует.
+> - **Без bug bounty, без внешнего аудита** — осознанный выбор. Кап $1M
+>   ограничивает blast-radius на время soft-launch.
+>
+> Заданные адреса (Base mainnet, chainId 8453):
+> - `OWNER_MULTISIG` = `0xADAa78db09f0f38ca68FF357ba5968c96B2d6D8F`
+> - `FEE_RECEIVER` = `0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De`
+
+### 11.1. Предусловия (один раз перед mainnet-деплоем)
+
+1. **Mainnet Safe (multisig)** `0xADAa…6D8F` — будущий **владелец Factory**.
+   ⚠️ Перед деплоем **проверь, что этот Safe реально задеплоен именно на Base
+   mainnet** (Safe-адреса привязаны к сети): открой
+   `https://basescan.org/address/0xADAa78db09f0f38ca68FF357ba5968c96B2d6D8F` —
+   должен быть контракт (вкладка Contract). Скрипт реверится с
+   `OWNER_MULTISIG must be a contract`, если кода там нет. Рекомендую
+   threshold ≥ 2/3 и держать подписантов «на низком старте» во время
+   soft-launch (быстрый `pause`).
+2. **`feeReceiver`** `0x1Cc4…59De` — адрес штрафов soft-режима. Снапшотится
+   в каждый Vault при создании — **необратимо**. Если это EOA, рассмотри
+   замену на treasury-multisig до запуска (для будущих вольтов меняется
+   `setFeeReceiver`, но уже созданные хранят старый).
+3. **Аппаратный кошелёк** (Ledger) для deployer-роли — нужна только для газа
+   и сразу отдаёт владение через `transferOwnership`. Плюс mainnet-RPC
+   деплоера (Alchemy / Infura / QuickNode).
+4. *(Опционально, на потом)* Внешний аудит (Spearbit / Cantina / Code4rena /
+   Sherlock). Не входит в этот soft-launch по твоему решению; внутренний
+   обзор — в `docs/security-audit.md`.
+
+### 11.2. Подготовка `.env`
+
+```bash
+# contracts/.env (НЕ коммитить)
+FEE_RECEIVER=0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De
+OWNER_MULTISIG=0xADAa78db09f0f38ca68FF357ba5968c96B2d6D8F
+USE_TIMELOCK=false           # выбранный профиль: multisig владеет напрямую
+# TIMELOCK_DELAY_SEC=...      # не используется при USE_TIMELOCK=false
+```
+
+> **Почему `false`:** см. callout «Выбранный профиль» выше — мгновенный
+> `pause()` важнее задержки на смену логики для unaudited soft-launch.
+> Компромисс: смена `implementation`/`feeReceiver` для будущих вольтов
+> применяется мгновенно по подписи multisig (без 48ч-окна для юзеров).
+> Когда захочешь добавить таймлок позже — задеплой `TimelockController`
+> и сделай `transferOwnership(timelock)` → `acceptOwnership` (см. §11.5,
+> вариант «С timelock»).
+
+### 11.3. Симуляция (без broadcast)
+
+```bash
+forge script script/DeployMainnet.s.sol:DeployMainnet \
+  --rpc-url base_mainnet -vvv
+```
+
+Покажет, какие адреса задеплоятся, и проверит preconditions. **Никаких
+транзакций не отправляется.**
+
+### 11.4. Деплой (broadcast + Ledger)
+
+```bash
+forge script script/DeployMainnet.s.sol:DeployMainnet \
+  --rpc-url base_mainnet \
+  --ledger \
+  --sender 0xYOUR_LEDGER_ADDRESS \
+  --broadcast \
+  -vvv
+```
+
+Если используешь зашифрованный keystore вместо Ledger — `--account <name>
+--sender 0x...` (как при тестнет-деплое).
+
+После успешного `ONCHAIN EXECUTION COMPLETE & SUCCESSFUL` запиши из
+вывода:
+- `Vault implementation` (immutable, нужен для будущих вольтов);
+- `Factory` (твой ACTIVE mainnet-факторий);
+- `Pending owner` — должен совпадать с `OWNER_MULTISIG` (`0xADAa…6D8F`).
+
+(При `USE_TIMELOCK=false` контракт `Timelock` не создаётся — в выводе
+будет `Multisig (pending owner)`.)
+
+### 11.5. Принятие владения (acceptOwnership)
+
+Owner Factory сейчас — **deployer EOA** (Ledger). Pending owner — Multisig.
+До приёма владения deployer формально ещё owner, но **уже не может сменить
+владельца на другой адрес** (повторный `transferOwnership` он бы мог, но в
+штатном потоке этого не делаем).
+
+**Выбранный профиль — без timelock** (`USE_TIMELOCK=false`):
+
+Из Safe `0xADAa…6D8F` → New transaction → Contract interaction → адрес
+**Factory** → метод `acceptOwnership()` → подписать threshold'ом. После
+этого `Factory.owner() == Multisig`. Одна транзакция, без задержки.
+
+<details>
+<summary><b>На будущее — добавление timelock</b> (когда протокол вырастет)</summary>
+
+1. Задеплой `TimelockController` (proposers/executors = `[multisig]`,
+   admin = `0x0`, delay ≥ 24h).
+2. Из Safe: `Factory.transferOwnership(timelock)`.
+3. Из Safe → `timelock.schedule(...)` с `data = 0x79ba5097`
+   (`acceptOwnership()`), `target = Factory`, ждёшь `delay`, затем
+   `timelock.execute(...)`. После этого owner = Timelock, и любые
+   `setImplementation`/`setFeeReceiver`/`pause` идут через задержку.
+   (Если хочешь сохранить мгновенный `pause` — сначала добавь отдельную
+   guardian-роль в контракт; это уже изменение кода.)
+</details>
+
+### 11.6. Верификация исходников
+
+```bash
+IMPL=0x...    # из вывода 11.4
+FACTORY=0x...
+FEE=0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De
+
+# Sourcify (keyless)
+forge verify-contract "$IMPL" src/DiamondHandsVault.sol:DiamondHandsVault \
+  --chain 8453 --verifier sourcify
+
+forge verify-contract "$FACTORY" src/DiamondHandsFactory.sol:DiamondHandsFactory \
+  --chain 8453 --verifier sourcify \
+  --constructor-args $(cast abi-encode "constructor(address,address)" "$IMPL" "$FEE")
+```
+
+*(При `USE_TIMELOCK=false` таймлок-контракта нет — верифицировать нечего.
+Команда для `TimelockController` понадобится, только когда добавишь таймлок
+позже.)*
+
+### 11.7. Включение фронта на mainnet
+
+В Vercel → Settings → Environment Variables:
+
+| Key | Value |
+| --- | --- |
+| `VITE_USE_TESTNET` | **удалить или не задавать** (mainnet — default) |
+| `VITE_FACTORY_ADDRESS` | удалить (дефолт берётся из кода после правки `contracts.ts`) |
+| `VITE_LEGACY_FACTORY_ADDRESSES` | удалить (по умолчанию у mainnet `[]`) |
+| `VITE_BASE_RPC_URL` | приватный mainnet-RPC (Alchemy / Infura) |
+| `VITE_BASE_SEPOLIA_RPC_URL` | можно удалить |
+
+Затем впиши новые адреса в `MAINNET` в `frontend/src/web3/contracts.ts`
+(см. TODO там), закоммить, мерж → Vercel автоматом передеплоит на чистый
+mainnet-билд. **Обязательно проверь манифест после редеплоя:**
+`/.well-known/farcaster.json` — `homeUrl` должен указывать на твой домен.
+
+### 11.8. TVL-кап $1M: мониторинг + пауза
+
+Кап реализован off-chain (пакет `monitoring/`, см. его README). Логика:
+монитор суммирует **текущие** балансы всех вольтов, оценивает в USD
+(DefiLlama) и алертит на **$800k (80%, WARN)** и **$1M (CRITICAL)** — чтобы
+multisig успел поставить `pause()`.
+
+**Настройка после деплоя:**
+
+1. В `monitoring/` задай env (или GitHub-секреты): `BASE_RPC_URL`,
+   `FACTORY_ADDRESSES` (новый mainnet-factory + legacy при наличии),
+   `START_BLOCK` (блок создания factory из §11.4), опц. `ALERT_WEBHOOK_URL`.
+2. Локально/на воркере: `cd monitoring && npm ci && npm run monitor`.
+   Для непрерывного контроля — cron раз в 1 мин на маленьком VPS.
+3. *(Опц.)* GitHub Actions: задай repo-переменную `TVL_MONITOR_ENABLED=true`
+   и секреты выше → workflow `.github/workflows/tvl-monitor.yml` будет
+   проверять TVL по расписанию. ⚠️ cron в GHA не realtime (задержки 5–30 мин)
+   — для жёсткого контроля используй выделенный воркер.
+
+**Стоп-кран (multisig `pause()`):** при WARN/CRITICAL из Safe `0xADAa…6D8F`
+→ Contract interaction → адрес **Factory** → `pause()` → подписать
+threshold'ом. После паузы новые вольты создавать нельзя; **существующие НЕ
+затронуты** — юзеры всегда могут вывести средства. Снять — `unpause()`.
+
+> **Важно:** `pause()` останавливает только **новые** депозиты. Это
+> «мягкий» кап — TVL может на короткое время превысить $1M между проверками
+> монитора. Держи буфер (WARN на 80%) и подписантов наготове. Жёсткого
+> on-chain капа в этом профиле нет (осознанный выбор — без нового
+> неаудированного кода).
+
+### 11.9. Постдеплой-чеклист
+
+- [ ] `OWNER_MULTISIG` (`0xADAa…6D8F`) — **контракт на Base mainnet**
+      (проверено в §11.1 перед деплоем).
+- [ ] `Factory.owner()` == Multisig `0xADAa…6D8F` (после `acceptOwnership`).
+- [ ] `Factory.pendingOwner()` == `0x0`.
+- [ ] `Factory.implementation()` == адрес impl из вывода §11.4.
+- [ ] `Factory.feeReceiver()` == `0x1Cc4…59De`.
+- [ ] Тестовая транзакция: создай вольт на минимальную сумму через фронт.
+- [ ] `monitoring/` настроен и запущен; тестовый прогон `npm run monitor`
+      показывает TVL и уровень `OK`.
+- [ ] Подписанты multisig знают runbook паузы (§11.8) и на связи.
+- [ ] Builder Code dataSuffix виден в calldata (последние 16 байт;
+      на BaseScan вкладка Input Data).
+- [ ] Алерты на события: `VaultCreated`, `Paused`, `ImplementationUpdated`,
+      `OwnershipTransferStarted`, `OwnershipTransferred` — Tenderly Alerts
+      или OpenZeppelin Defender.
 
 ---
 
@@ -297,4 +506,13 @@ forge script script/Deploy.s.sol:Deploy \
   BaseScan отображает исходники по Sourcify-матчу.
 
 ### Base Mainnet (chainId 8453)
-- НЕ ЗАДЕПЛОЕНО
+- **НЕ ЗАДЕПЛОЕНО** (runbook: секция 11). Профиль: `USE_TIMELOCK=false`
+  (multisig владеет напрямую), TVL-кап $1M через `monitoring/`.
+- Заданные адреса (вход):
+  - Owner multisig (Safe): `0xADAa78db09f0f38ca68FF357ba5968c96B2d6D8F`
+  - Fee receiver: `0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De`
+- После деплоя заполнить (выход):
+  - DiamondHandsVault implementation: `0x…`
+  - DiamondHandsFactory: `0x…`
+  - START_BLOCK (для монитора): `…`
+  - Block / tx hashes / верификация (Sourcify)

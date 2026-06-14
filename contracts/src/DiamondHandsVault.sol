@@ -6,6 +6,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {IDiamondHandsVault} from "./interfaces/IDiamondHandsVault.sol";
 import {Errors} from "./errors/Errors.sol";
 
 /// @title  DiamondHandsVault
@@ -18,7 +19,7 @@ import {Errors} from "./errors/Errors.sol";
 ///         персонален у каждого клона, а код общий через delegatecall.
 ///         Конструктор вызывает `_disableInitializers()`, что блокирует
 ///         любой прямой `initialize` на этом адресе.
-contract DiamondHandsVault is Initializable, ReentrancyGuard {
+contract DiamondHandsVault is IDiamondHandsVault, Initializable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // -----------------------------------------------------------------
@@ -148,7 +149,7 @@ contract DiamondHandsVault is Initializable, ReentrancyGuard {
         bool allowEarlyExit_,
         address feeReceiver_,
         uint16 maxPenaltyBps_
-    ) external initializer {
+    ) external override initializer {
         if (owner_ == address(0)) revert Errors.ZeroAddress();
         if (asset_ == address(0)) revert Errors.InvalidAsset();
         if (amount_ == 0) revert Errors.AmountZero();
