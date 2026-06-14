@@ -505,14 +505,23 @@ threshold'ом. После паузы новые вольты создавать
 - Верификация: ✅ Sourcify (2026-06-11), оба контракта верифицированы.
   BaseScan отображает исходники по Sourcify-матчу.
 
-### Base Mainnet (chainId 8453)
-- **НЕ ЗАДЕПЛОЕНО** (runbook: секция 11). Профиль: `USE_TIMELOCK=false`
-  (multisig владеет напрямую), TVL-кап $1M через `monitoring/`.
-- Заданные адреса (вход):
-  - Owner multisig (Safe): `0xADAa78db09f0f38ca68FF357ba5968c96B2d6D8F`
-  - Fee receiver: `0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De`
-- После деплоя заполнить (выход):
-  - DiamondHandsVault implementation: `0x…`
-  - DiamondHandsFactory: `0x…`
-  - START_BLOCK (для монитора): `…`
-  - Block / tx hashes / верификация (Sourcify)
+### Base Mainnet (chainId 8453) — задеплоено 2026-06-14
+Профиль: `USE_TIMELOCK=false` (multisig владеет напрямую), TVL-кап $1M
+через `monitoring/`.
+- DiamondHandsVault implementation: `0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e`
+- DiamondHandsFactory: `0x89de426deF37Aa34c17f72d6a73229E64dd93e11`
+- Fee receiver: `0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De`
+- Owner multisig (Safe, pending owner): `0xADAa78db09f0f38ca68FF357ba5968c96B2d6D8F`
+- Block: 47318595 · газ всего ≈ 0.0000121 ETH
+- Tx hash impl deploy: `0x40cd757e44a5ba4fd5dae22888796b1bfec8a0547f05ff340c50c37cd1131dc8`
+- Tx hash factory deploy: `0xb906daf5955c3cd41576f1b687a17e27dc94550ee19736ba91f0548eb8b0b0fb`
+- Tx hash transferOwnership→multisig: `0x76a112513234cb98b623cc2b5203dd09ef2072ab3133f8d976ca6d9eb0dfbe6c`
+- Верификация: ✅ BaseScan (Etherscan V2), оба контракта `Pass - Verified`.
+- Explorer:
+  - https://basescan.org/address/0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e
+  - https://basescan.org/address/0x89de426deF37Aa34c17f72d6a73229E64dd93e11
+- ⚠️ Адреса совпадают с Base Sepolia v1 — это детерминированный CREATE
+  (тот же деплоер-ключ, nonce 0/1), разные сети, коллизии нет.
+- ⏳ **PENDING: `acceptOwnership()` из Safe** — до этого владелец = деплоер-EOA.
+- Мониторинг: `FACTORY_ADDRESSES=0x89de426deF37Aa34c17f72d6a73229E64dd93e11`,
+  `START_BLOCK=47318595`.

@@ -30,9 +30,12 @@ type ChainAddrs = {
 };
 
 const MAINNET: ChainAddrs = {
-  // TODO(mainnet): fill after deploying the factory on Base mainnet
-  factory: "0x0000000000000000000000000000000000000000" as Address,
-  vaultImpl: "0x0000000000000000000000000000000000000000" as Address,
+  // Deployed 2026-06-14 on Base mainnet (block 47318595), both verified.
+  // NOTE: these match the Base Sepolia v1 addresses by coincidence — contract
+  // addresses are deterministic from (deployer, nonce), and the same deployer
+  // key had nonce 0/1 on mainnet. Different chains, no runtime collision.
+  factory: "0x89de426deF37Aa34c17f72d6a73229E64dd93e11" as Address,
+  vaultImpl: "0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e" as Address,
   weth: "0x4200000000000000000000000000000000000006" as Address,
   legacy: [],
 };
