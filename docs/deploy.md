@@ -535,6 +535,7 @@ threshold'ом. После паузы новые вольты создавать
   - https://basescan.org/address/0x89de426deF37Aa34c17f72d6a73229E64dd93e11
 - ⚠️ Адреса совпадают с Base Sepolia v1 — это детерминированный CREATE
   (тот же деплоер-ключ, nonce 0/1), разные сети, коллизии нет.
-- ⏳ **PENDING: `acceptOwnership()` из Safe** — до этого владелец = деплоер-EOA.
+- ✅ **Владение принято (2026-06-14):** `owner()` == `0x1Cc4…59De`,
+  `pendingOwner()` == `0x0`. Factory под контролем 2/2-Safe.
 - Мониторинг: `FACTORY_ADDRESSES=0x89de426deF37Aa34c17f72d6a73229E64dd93e11`,
   `START_BLOCK=47318595`.
