@@ -95,9 +95,18 @@ async function fetchVaults(client: PublicClient, latest: bigint): Promise<VaultR
         }
         from = to + 1n;
       } catch (e) {
-        const msg = String((e as Error)?.message ?? e);
-        const tooLarge = /too large|exceeds|range|limit/i.test(msg);
-        if (tooLarge && step > MIN_LOG_STEP) {
+        // Ankr's -32062 is overloaded: "Block range is too large" AND "Batch
+        // size too large" share the code, so match on the message — only the
+        // block-range variant should trigger halving. Other providers spell
+        // it differently (Alchemy: "exceeds the maximum block range") so we
+        // accept a few wordings, but always anchored to "block" or "range".
+        const msg = String((e as Error)?.message ?? e).toLowerCase();
+        const rangeTooLarge =
+          (msg.includes("block range") && msg.includes("too large")) ||
+          msg.includes("exceeds the maximum block range") ||
+          msg.includes("query returned more than") ||
+          msg.includes("range is too large");
+        if (rangeTooLarge && step > MIN_LOG_STEP) {
           step = step / 2n < MIN_LOG_STEP ? MIN_LOG_STEP : step / 2n;
           console.error(`[info] RPC capped log range — retrying with step=${step}`);
           continue;
