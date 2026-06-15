@@ -4,6 +4,7 @@ import type { Address } from "viem";
 import type { Vault } from "../types";
 import { CHAIN_ID, FACTORY_ADDRESSES, erc20Abi, factoryAbi, vaultAbi } from "./contracts";
 import { mapVault, type AssetMeta, type VaultReads } from "./mapVault";
+import { useTokenPrices } from "./usePrices";
 
 /// Vault view fields read per clone, in this fixed order (consumed by mapVault).
 const VAULT_FIELDS = [
@@ -104,9 +105,18 @@ function useVaultReads(addresses: Address[]) {
     return map;
   }, [metaReads.data, assetAddrs]);
 
+  // (3) USD price per distinct asset (DefiLlama, mainnet) → vault.token.price,
+  //     so the dashboard total + per-vault USD and the detail screen light up.
+  const { prices } = useTokenPrices(assetAddrs);
+
   const vaults = useMemo<Vault[]>(
-    () => rawVaults.map((r) => mapVault(r, assetMeta.get(r.asset.toLowerCase()))),
-    [rawVaults, assetMeta],
+    () =>
+      rawVaults.map((r) => {
+        const v = mapVault(r, assetMeta.get(r.asset.toLowerCase()));
+        const price = prices.get(r.asset.toLowerCase());
+        return price === undefined ? v : { ...v, token: { ...v.token, price } };
+      }),
+    [rawVaults, assetMeta, prices],
   );
 
   const isLoading =

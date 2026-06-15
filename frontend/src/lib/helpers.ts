@@ -48,6 +48,32 @@ export function fmtNum(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+/// Insert thousand separators into a raw numeric string while keeping the
+/// decimal part intact ("1234.5" → "1,234.5", "1234." → "1,234."). Used to
+/// display a controlled <input> so the user can read amounts at a glance
+/// without losing the typing flow. State stays raw (no commas); only the
+/// rendered value is grouped.
+export function formatGrouped(s: string): string {
+  if (!s) return s;
+  const dot = s.indexOf(".");
+  const intPart = dot === -1 ? s : s.slice(0, dot);
+  const tail = dot === -1 ? "" : s.slice(dot); // includes the "."
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return grouped + tail;
+}
+
+/// USD with enough precision to be useful next to a typed amount preview
+/// — full grouped number under $10k, then K/M shorthand. Distinct from
+/// `fmtUsd` (always shorthand) which dashboards/cards use to stay compact.
+export function fmtUsdPrecise(n?: number): string {
+  if (n === undefined || !isFinite(n)) return "—";
+  if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 10_000) return "$" + (n / 1000).toFixed(1) + "K";
+  if (n >= 1) return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  if (n > 0) return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 });
+  return "$0";
+}
+
 export type Countdown = {
   days: number;
   hrs: number;

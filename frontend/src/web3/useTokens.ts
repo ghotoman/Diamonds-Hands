@@ -4,10 +4,13 @@ import { formatUnits, isAddress, type Address } from "viem";
 import type { Token } from "../types";
 import { CHAIN_ID, erc20Abi } from "./contracts";
 import { KNOWN_TOKENS, resolveToken } from "./tokenRegistry";
+import { useTokenPrice, useTokenPrices } from "./usePrices";
 
-/// Known tokens with the connected wallet's live balance attached.
-/// Used by the create flow's picker in live mode (no price oracle in V1,
-/// so `price` stays undefined → USD shows "—").
+const KNOWN_ADDRESSES = KNOWN_TOKENS.map((t) => t.address);
+
+/// Known tokens with the connected wallet's live balance + USD price attached.
+/// Used by the create flow's picker. Price comes from DefiLlama (mainnet);
+/// tokens it doesn't cover keep `price` undefined → USD shows "—".
 export function useTokens(owner?: Address): Token[] {
   const contracts = useMemo(
     () =>
@@ -24,6 +27,7 @@ export function useTokens(owner?: Address): Token[] {
   );
 
   const reads = useReadContracts({ contracts, query: { enabled: !!owner } });
+  const { prices } = useTokenPrices(KNOWN_ADDRESSES);
 
   return useMemo(
     () =>
@@ -31,9 +35,9 @@ export function useTokens(owner?: Address): Token[] {
         const r = reads.data?.[i];
         const balance =
           r?.status === "success" ? Number(formatUnits(r.result as bigint, t.decimals)) : undefined;
-        return { ...t, balance };
+        return { ...t, balance, price: prices.get(t.address.toLowerCase()) };
       }),
-    [reads.data],
+    [reads.data, prices],
   );
 }
 
@@ -63,6 +67,7 @@ export function useCustomToken(address?: Address): {
   }, [valid, address, owner]);
 
   const reads = useReadContracts({ contracts, query: { enabled: valid } });
+  const { price } = useTokenPrice(valid ? address : undefined);
 
   const token = useMemo<Token | undefined>(() => {
     if (!valid || !address || !reads.data) return undefined;
@@ -76,8 +81,8 @@ export function useCustomToken(address?: Address): {
     const bal = reads.data[2];
     const balance =
       bal?.status === "success" ? Number(formatUnits(bal.result as bigint, t.decimals)) : undefined;
-    return { ...t, balance };
-  }, [valid, address, reads.data]);
+    return { ...t, balance, price };
+  }, [valid, address, reads.data, price]);
 
   return {
     token,
