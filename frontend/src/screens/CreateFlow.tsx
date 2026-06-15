@@ -170,7 +170,9 @@ function TokenRow({
       </div>
       <div className="text-right shrink-0">
         <div className="text-[15px] font-semibold text-ink tabular-nums">{fmtNum(t.balance ?? 0)}</div>
-        <div className="text-[12px] text-sub">{fmtUsd((t.balance ?? 0) * (t.price ?? 0))}</div>
+        <div className="text-[12px] text-sub">
+          {t.price === undefined ? "—" : fmtUsd((t.balance ?? 0) * t.price)}
+        </div>
       </div>
     </button>
   );
