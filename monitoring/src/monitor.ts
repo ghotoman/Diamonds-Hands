@@ -38,8 +38,12 @@ const FACTORY_ADDRESSES = reqEnv("FACTORY_ADDRESSES")
 /// First block to scan for VaultCreated (the earliest factory's deploy block).
 /// Defaults to 0 but SET THIS — scanning from genesis is slow/expensive.
 const START_BLOCK = BigInt(process.env.START_BLOCK ?? "0");
-/// eth_getLogs range chunk (public RPCs cap the span). 50k is widely safe.
-const LOG_STEP = BigInt(process.env.LOG_STEP ?? "50000");
+/// eth_getLogs range chunk. Conservative default — Ankr's Base endpoint caps
+/// at ~3k blocks per request, Alchemy is fine with much larger, etc. If the
+/// RPC complains "range too large", `fetchVaults` halves the step on the fly
+/// (down to MIN_LOG_STEP) so any provider works without manual tuning.
+const LOG_STEP = BigInt(process.env.LOG_STEP ?? "2000");
+const MIN_LOG_STEP = 100n;
 
 const HARD_USD = Number(process.env.THRESHOLD_USD ?? "1000000");
 const WARN_RATIO = Number(process.env.WARN_RATIO ?? "0.8");
@@ -76,13 +80,38 @@ const factoryAbi = parseAbi(["function paused() view returns (bool)"]);
 async function fetchVaults(client: PublicClient, latest: bigint): Promise<VaultRef[]> {
   const refs: VaultRef[] = [];
   for (const factory of FACTORY_ADDRESSES) {
-    for (let from = START_BLOCK; from <= latest; from += LOG_STEP) {
-      const to = from + LOG_STEP - 1n > latest ? latest : from + LOG_STEP - 1n;
-      const logs = await client.getLogs({ address: factory, event: VAULT_CREATED, fromBlock: from, toBlock: to });
-      for (const log of logs) {
-        const vault = log.args.vault;
-        const asset = log.args.asset;
-        if (vault && asset) refs.push({ vault, asset });
+    // Adaptive chunk: start at LOG_STEP, halve on "range too large" (per-call
+    // window, not global state — different providers may agree at different
+    // sizes; we don't want to permanently shrink for everyone).
+    let step = LOG_STEP;
+    for (let from = START_BLOCK; from <= latest; ) {
+      const to = from + step - 1n > latest ? latest : from + step - 1n;
+      try {
+        const logs = await client.getLogs({ address: factory, event: VAULT_CREATED, fromBlock: from, toBlock: to });
+        for (const log of logs) {
+          const vault = log.args.vault;
+          const asset = log.args.asset;
+          if (vault && asset) refs.push({ vault, asset });
+        }
+        from = to + 1n;
+      } catch (e) {
+        // Ankr's -32062 is overloaded: "Block range is too large" AND "Batch
+        // size too large" share the code, so match on the message — only the
+        // block-range variant should trigger halving. Other providers spell
+        // it differently (Alchemy: "exceeds the maximum block range") so we
+        // accept a few wordings, but always anchored to "block" or "range".
+        const msg = String((e as Error)?.message ?? e).toLowerCase();
+        const rangeTooLarge =
+          (msg.includes("block range") && msg.includes("too large")) ||
+          msg.includes("exceeds the maximum block range") ||
+          msg.includes("query returned more than") ||
+          msg.includes("range is too large");
+        if (rangeTooLarge && step > MIN_LOG_STEP) {
+          step = step / 2n < MIN_LOG_STEP ? MIN_LOG_STEP : step / 2n;
+          console.error(`[info] RPC capped log range — retrying with step=${step}`);
+          continue;
+        }
+        throw e;
       }
     }
   }
