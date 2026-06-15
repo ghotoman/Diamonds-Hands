@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { isAddress, type Address } from "viem";
 import type { Token, VaultMode } from "../types";
-import { cx, DAY, fmtNum, fmtUsd, PRESETS } from "../lib/helpers";
+import { cx, DAY, fmtNum, fmtUsd, fmtUsdPrecise, formatGrouped, PRESETS } from "../lib/helpers";
 import { MOCK_TOKENS } from "../lib/mock";
 import { useCustomToken } from "../web3/useTokens";
 import { useFactoryLimits } from "../web3/useFactoryLimits";
+import { useTokenPrice } from "../web3/usePrices";
 import { Icon } from "../components/Icon";
 import { TokenBadge } from "../components/TokenBadge";
 import { ModeBadge } from "../components/Badge";
@@ -279,6 +280,11 @@ function StepAmount({
   over: boolean;
   needsApprove: boolean;
 }) {
+  // Live USD via DefiLlama. Falls back to any preset `t.price` (mock list);
+  // when both are missing we render an em-dash so it never lies about $0.
+  const { price: livePrice, isLoading: priceLoading } = useTokenPrice(t.address);
+  const price = livePrice ?? t.price;
+  const usdValue = price !== undefined ? amt * price : undefined;
   return (
     <div>
       <div className="flex items-center gap-3 mb-5">
@@ -291,8 +297,19 @@ function StepAmount({
       <div className={cx("rounded-2xl border p-5 transition-colors", over ? "border-danger bg-[#E11D4808]" : "border-line bg-surface")}>
         <div className="flex items-baseline gap-2">
           <input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+            value={formatGrouped(amount)}
+            onChange={(e) => {
+              // Keep state RAW (no commas); the displayed value is grouped on
+              // every render via formatGrouped. Strip everything but digits and
+              // dots, then collapse multiple dots into the first one (so a
+              // pasted "1,234.56.78" still parses as 1234.56).
+              let v = e.target.value.replace(/[^0-9.]/g, "");
+              const firstDot = v.indexOf(".");
+              if (firstDot !== -1) {
+                v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, "");
+              }
+              setAmount(v);
+            }}
             inputMode="decimal"
             placeholder="0"
             className="w-full bg-transparent outline-none text-[40px] font-bold text-ink tracking-tight tabular-nums placeholder:text-line"
@@ -300,7 +317,9 @@ function StepAmount({
           <span className="text-[18px] font-semibold text-sub shrink-0">{t.sym}</span>
         </div>
         <div className="mt-1 flex items-center justify-between">
-          <span className="text-[14px] text-sub tabular-nums">≈ {fmtUsd(amt * (t.price ?? 0))}</span>
+          <span className="text-[14px] text-sub tabular-nums">
+            ≈ {usdValue !== undefined ? fmtUsdPrecise(usdValue) : priceLoading ? "—" : "no price"}
+          </span>
           <button
             onClick={() => setAmount(String(t.balance ?? 0))}
             className="rounded-lg bg-[#0000FF0F] text-baseblue text-[13px] font-bold px-3 h-8 active:scale-95"
@@ -506,6 +525,9 @@ function StepConfirm({
   needsApprove: boolean;
 }) {
   const unlock = new Date(Date.now() + days * DAY);
+  const { price: livePrice } = useTokenPrice(t.address);
+  const price = livePrice ?? t.price;
+  const usdValue = price !== undefined ? amt * price : undefined;
   const Row = ({ k, children }: { k: string; children: React.ReactNode }) => (
     <div className="flex items-center justify-between py-3 border-b border-line last:border-0">
       <span className="text-[14px] text-sub">{k}</span>
@@ -521,7 +543,7 @@ function StepConfirm({
             <div className="text-[24px] font-bold text-ink tabular-nums leading-none">
               {fmtNum(amt)} {t.sym}
             </div>
-            <div className="mt-1 text-[13px] text-sub">≈ {fmtUsd(amt * (t.price ?? 0))}</div>
+            <div className="mt-1 text-[13px] text-sub">≈ {fmtUsdPrecise(usdValue)}</div>
           </div>
         </div>
         <Row k="Term">{days} days</Row>
