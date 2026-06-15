@@ -286,8 +286,12 @@ timelock, и невозможность обойти timelock при `setImpleme
 >   ограничивает blast-radius на время soft-launch.
 >
 > Заданные адреса (Base mainnet, chainId 8453):
-> - `OWNER_MULTISIG` = `0xADAa78db09f0f38ca68FF357ba5968c96B2d6D8F`
+> - `OWNER_MULTISIG` (env при деплое) = `0xADAa78db09f0f38ca68FF357ba5968c96B2d6D8F`
 > - `FEE_RECEIVER` = `0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De`
+>
+> 🔧 **Итоговый владелец — `0x1Cc4…59De`** (не `0xADAa…`): адрес `0xADAa…`
+> оказался не Safe на Base, владение переназначено на рабочий 2/2-Safe
+> `0x1Cc4…59De` (= fee receiver). Подробности — раздел «Адреса деплоя».
 
 ### 11.1. Предусловия (один раз перед mainnet-деплоем)
 
@@ -370,9 +374,14 @@ Owner Factory сейчас — **deployer EOA** (Ledger). Pending owner — Mult
 
 **Выбранный профиль — без timelock** (`USE_TIMELOCK=false`):
 
-Из Safe `0xADAa…6D8F` → New transaction → Contract interaction → адрес
-**Factory** → метод `acceptOwnership()` → подписать threshold'ом. После
-этого `Factory.owner() == Multisig`. Одна транзакция, без задержки.
+Из Safe-владельца `0x1Cc4…59De` → New transaction → Contract interaction →
+адрес **Factory** → метод `acceptOwnership()` → подписать threshold'ом.
+После этого `Factory.owner() == Safe`. Одна транзакция, без задержки.
+
+> 🔧 Изначально `pendingOwner` был выставлен на `0xADAa…6D8F`, но он оказался
+> не Safe на Base. Деплоер (ещё owner) переназначил владение на `0x1Cc4…59De`
+> через `transferOwnership(0x1Cc4…)`, после чего принимаем отсюда. Деталь:
+> повторный `transferOwnership` просто перезаписывает `pendingOwner`.
 
 <details>
 <summary><b>На будущее — добавление timelock</b> (когда протокол вырастет)</summary>
@@ -444,7 +453,7 @@ multisig успел поставить `pause()`.
    проверять TVL по расписанию. ⚠️ cron в GHA не realtime (задержки 5–30 мин)
    — для жёсткого контроля используй выделенный воркер.
 
-**Стоп-кран (multisig `pause()`):** при WARN/CRITICAL из Safe `0xADAa…6D8F`
+**Стоп-кран (multisig `pause()`):** при WARN/CRITICAL из Safe `0x1Cc4…59De`
 → Contract interaction → адрес **Factory** → `pause()` → подписать
 threshold'ом. После паузы новые вольты создавать нельзя; **существующие НЕ
 затронуты** — юзеры всегда могут вывести средства. Снять — `unpause()`.
@@ -457,9 +466,9 @@ threshold'ом. После паузы новые вольты создавать
 
 ### 11.9. Постдеплой-чеклист
 
-- [ ] `OWNER_MULTISIG` (`0xADAa…6D8F`) — **контракт на Base mainnet**
-      (проверено в §11.1 перед деплоем).
-- [ ] `Factory.owner()` == Multisig `0xADAa…6D8F` (после `acceptOwnership`).
+- [ ] Owner Safe (`0x1Cc4…59De`) — **реальный Safe на Base mainnet**
+      (0xADAa…6D8F оказался не Safe — см. коррекцию в разделе «Адреса»).
+- [ ] `Factory.owner()` == Safe `0x1Cc4…59De` (после `acceptOwnership`).
 - [ ] `Factory.pendingOwner()` == `0x0`.
 - [ ] `Factory.implementation()` == адрес impl из вывода §11.4.
 - [ ] `Factory.feeReceiver()` == `0x1Cc4…59De`.
@@ -505,14 +514,28 @@ threshold'ом. После паузы новые вольты создавать
 - Верификация: ✅ Sourcify (2026-06-11), оба контракта верифицированы.
   BaseScan отображает исходники по Sourcify-матчу.
 
-### Base Mainnet (chainId 8453)
-- **НЕ ЗАДЕПЛОЕНО** (runbook: секция 11). Профиль: `USE_TIMELOCK=false`
-  (multisig владеет напрямую), TVL-кап $1M через `monitoring/`.
-- Заданные адреса (вход):
-  - Owner multisig (Safe): `0xADAa78db09f0f38ca68FF357ba5968c96B2d6D8F`
-  - Fee receiver: `0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De`
-- После деплоя заполнить (выход):
-  - DiamondHandsVault implementation: `0x…`
-  - DiamondHandsFactory: `0x…`
-  - START_BLOCK (для монитора): `…`
-  - Block / tx hashes / верификация (Sourcify)
+### Base Mainnet (chainId 8453) — задеплоено 2026-06-14
+Профиль: `USE_TIMELOCK=false` (multisig владеет напрямую), TVL-кап $1M
+через `monitoring/`.
+- DiamondHandsVault implementation: `0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e`
+- DiamondHandsFactory: `0x89de426deF37Aa34c17f72d6a73229E64dd93e11`
+- Fee receiver: `0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De`
+- Owner (Safe, 2/2): `0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De`
+  - 🔧 **Коррекция (2026-06-14):** деплой задал `OWNER_MULTISIG=0xADAa…6D8F`,
+    но этот адрес оказался **не Safe на Base** (Safe-апп: «not a valid Safe
+    Account»). Владение переназначено деплоером на рабочий 2/2-Safe
+    `0x1Cc4…59De` (он же fee receiver). Т.е. owner == feeReceiver.
+- Block: 47318595 · газ всего ≈ 0.0000121 ETH
+- Tx hash impl deploy: `0x40cd757e44a5ba4fd5dae22888796b1bfec8a0547f05ff340c50c37cd1131dc8`
+- Tx hash factory deploy: `0xb906daf5955c3cd41576f1b687a17e27dc94550ee19736ba91f0548eb8b0b0fb`
+- Tx hash transferOwnership→multisig: `0x76a112513234cb98b623cc2b5203dd09ef2072ab3133f8d976ca6d9eb0dfbe6c`
+- Верификация: ✅ BaseScan (Etherscan V2), оба контракта `Pass - Verified`.
+- Explorer:
+  - https://basescan.org/address/0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e
+  - https://basescan.org/address/0x89de426deF37Aa34c17f72d6a73229E64dd93e11
+- ⚠️ Адреса совпадают с Base Sepolia v1 — это детерминированный CREATE
+  (тот же деплоер-ключ, nonce 0/1), разные сети, коллизии нет.
+- ✅ **Владение принято (2026-06-14):** `owner()` == `0x1Cc4…59De`,
+  `pendingOwner()` == `0x0`. Factory под контролем 2/2-Safe.
+- Мониторинг: `FACTORY_ADDRESSES=0x89de426deF37Aa34c17f72d6a73229E64dd93e11`,
+  `START_BLOCK=47318595`.
