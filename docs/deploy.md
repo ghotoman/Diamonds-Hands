@@ -539,3 +539,7 @@ threshold'ом. После паузы новые вольты создавать
   `pendingOwner()` == `0x0`. Factory под контролем 2/2-Safe.
 - Мониторинг: `FACTORY_ADDRESSES=0x89de426deF37Aa34c17f72d6a73229E64dd93e11`,
   `START_BLOCK=47318595`.
+- ✅ **Фронт (mainnet):** <https://diamonds-hands.vercel.app> · COOP-заголовок
+  `same-origin-allow-popups` выставлен (vercel.json/netlify.toml).
+- ✅ **Mini App опубликован, домен verified** (FID 328804). Universal-link для
+  шеринга в X/Telegram: <https://farcaster.xyz/miniapps/eAC5uX9rFXVs/diamond-hands>

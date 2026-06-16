@@ -13,6 +13,10 @@ physically remove your own ability to sell early.
 Non-custodial: each vault is a per-user EIP-1167 clone; nobody — not even the
 factory owner — can touch your funds.
 
+**🚀 Live on Base mainnet** — soft-launch (TVL-capped):
+- Open in Base App / Farcaster: <https://farcaster.xyz/miniapps/eAC5uX9rFXVs/diamond-hands>
+- Web: <https://diamonds-hands.vercel.app>
+
 ---
 
 ## How it works
@@ -58,12 +62,26 @@ Full design: [`docs/context-brief.md`](docs/context-brief.md) ·
 
 ---
 
+## Deployed (Base mainnet, chainId 8453)
+
+| Contract | Address |
+|----------|---------|
+| DiamondHandsFactory | [`0x89de426deF37Aa34c17f72d6a73229E64dd93e11`](https://basescan.org/address/0x89de426def37aa34c17f72d6a73229e64dd93e11#code) |
+| DiamondHandsVault (impl) | [`0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e`](https://basescan.org/address/0x2391cdbac7be38fc72e7ba7609157a3e2e6b823e#code) |
+
+Owner + fee receiver: 2/2 Safe `0x1Cc4CB5192095E859cFF3fc1C0505Cbe210959De`.
+Verified on BaseScan. Soft-launch with a $1M TVL cap enforced off-chain
+(`monitoring/`). Full runbook: [`docs/deploy.md`](docs/deploy.md) §11.
+
+> Mainnet addresses equal the Base Sepolia v1 ones by deterministic CREATE
+> (same deployer + nonce) — different chains, no collision.
+
 ## Deployed (Base Sepolia, chainId 84532)
 
 | Contract | Address |
 |----------|---------|
-| DiamondHandsFactory | [`0x89de426deF37Aa34c17f72d6a73229E64dd93e11`](https://sepolia.basescan.org/address/0x89de426def37aa34c17f72d6a73229e64dd93e11#code) |
-| DiamondHandsVault (impl) | [`0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e`](https://sepolia.basescan.org/address/0x2391cdbac7be38fc72e7ba7609157a3e2e6b823e#code) |
+| DiamondHandsFactory (v2) | [`0xE0a0836f19d604e3aEEf1c55a59e50e1cE806cC3`](https://sepolia.basescan.org/address/0xe0a0836f19d604e3aeef1c55a59e50e1ce806cc3#code) |
+| DiamondHandsVault (impl v2) | [`0xD41FA9D180187C79E220A1C5968Da8E145646f07`](https://sepolia.basescan.org/address/0xd41fa9d180187c79e220a1c5968da8e145646f07#code) |
 
 Verified on Sourcify. See [`docs/deploy.md`](docs/deploy.md) for the full
 deployment runbook.
@@ -128,15 +146,22 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 
 - ✅ Phase 0 — spec & architecture (`docs/`)
 - ✅ Phase 1 — contracts (Foundry, 100%/98% coverage, invariants, security review)
-- ✅ Deployed + verified on Base Sepolia
 - ✅ Phase 3 — frontend (full create + manage flow, Base App MiniKit)
+- ✅ Deployed + verified on Base Sepolia and **Base mainnet**
+- ✅ Mainnet soft-launch — Safe-owned, $1M TVL cap (`monitoring/`), verified Mini App
 
 ## Security
 
-V1 is a testnet release. The contracts hold user funds: a focused security
-review found no high/medium issues, but **no external audit has been done** —
-do not use on mainnet with real funds without one. Key invariants and the
-threat model are documented in `docs/`.
+Live on Base mainnet as a **soft-launch**. The contracts hold user funds: a
+focused internal review (`docs/security-audit.md`) found no high/medium issues,
+but **no external audit has been done**. Risk is bounded for launch by:
+
+- a **$1M TVL cap** watched off-chain (`monitoring/`) with multisig `pause()`;
+- **2/2 Safe** ownership (`0x1Cc4…59De`) — `renounceOwnership` is disabled, the
+  factory owner still cannot touch user funds (each vault is an isolated clone).
+
+Until an external audit, treat deposits accordingly. Key invariants and the
+threat model are in `docs/`.
 
 ## License
 

@@ -9,14 +9,20 @@
     "version": "1",
     "name": "Diamond Hands",
     "subtitle": "Beat paper hands",
+    "tagline": "Beat paper hands on-chain",
     "description": "Lock your ERC-20 on-chain for a fixed term and beat paper hands. Soft mode with a decaying penalty, or hard lock.",
     "iconUrl": "__APP_URL__/icon.png",
     "homeUrl": "__APP_URL__",
+    "imageUrl": "__APP_URL__/embed.png",
+    "buttonTitle": "Open Diamond Hands",
     "splashImageUrl": "__APP_URL__/splash.png",
     "splashBackgroundColor": "#0b1120",
     "heroImageUrl": "__APP_URL__/embed.png",
+    "ogTitle": "Diamond Hands",
+    "ogDescription": "Lock any ERC-20 on Base for a fixed term — hard lock or soft mode.",
     "ogImageUrl": "__APP_URL__/og.png",
     "primaryCategory": "finance",
-    "tags": ["defi", "base", "hodl", "lock", "erc20"]
+    "tags": ["defi", "base", "hodl", "lock", "erc20"],
+    "requiredChains": ["eip155:8453"]
   }
 }
