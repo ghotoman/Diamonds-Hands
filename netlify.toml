@@ -10,3 +10,12 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Let the Coinbase Smart Wallet popup (keys.coinbase.com) reach window.opener.
+# `same-origin` would null it → "this app does not support smart wallets".
+# COEP is intentionally left unset (not required, and can break embeds).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
+
