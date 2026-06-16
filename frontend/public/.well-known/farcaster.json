@@ -1,5 +1,10 @@
 {
-  "_comment": "Base App / Farcaster Mini App manifest. __APP_URL__ is filled at build time from VITE_APP_URL (or the host URL on Vercel/Netlify). Base App discovery is handled via the base:app_id meta tag (index.html). accountAssociation is optional and only needed for native Farcaster/Warpcast verification — generate it with the Farcaster manifest tool for this domain and add it back here if you want that.",
+  "_comment": "Base App / Farcaster Mini App manifest. __APP_URL__ is filled at build time from VITE_APP_URL (or the host URL on Vercel/Netlify). accountAssociation binds this domain (diamonds-hands.vercel.app) to FID 328804 — generated with the Farcaster manifest tool; regenerate if the domain changes.",
+  "accountAssociation": {
+    "header": "eyJmaWQiOjMyODgwNCwidHlwZSI6ImF1dGgiLCJrZXkiOiIweEEwNDJCNDUzMTFlMWYxMTYxMjNEMjA4NEQ3QzM2QzVjQjgxMTBiREIifQ",
+    "payload": "eyJkb21haW4iOiJkaWFtb25kcy1oYW5kcy52ZXJjZWwuYXBwIn0",
+    "signature": "du/d6l+v2EePqy0deLLlPKFyZPHnZdN+YDV3EfYR7+FtVvQ+bzvqI9Ed+GP4+e8LPJYXOBiUnuh1ZTaHLYU6sBs="
+  },
   "miniapp": {
     "version": "1",
     "name": "Diamond Hands",
