@@ -2,7 +2,6 @@ import { useState } from "react";
 import { isAddress, type Address } from "viem";
 import type { Token, VaultMode } from "../types";
 import { cx, DAY, fmtNum, fmtUsd, fmtUsdPrecise, formatGrouped, PRESETS } from "../lib/helpers";
-import { MOCK_TOKENS } from "../lib/mock";
 import { useCustomToken } from "../web3/useTokens";
 import { useFactoryLimits } from "../web3/useFactoryLimits";
 import { useTokenPrice } from "../web3/usePrices";
@@ -28,12 +27,12 @@ const TITLES = ["", "Pick a token", "How much to lock", "For how long", "Lock mo
 export function CreateFlow({
   onCancel,
   onSubmit,
-  tokens = MOCK_TOKENS,
+  tokens,
   allowCustom = false,
 }: {
   onCancel: () => void;
   onSubmit: (f: CreateForm) => void;
-  tokens?: Token[];
+  tokens: Token[];
   /// live mode: let the user paste any ERC-20 contract address
   allowCustom?: boolean;
 }) {
