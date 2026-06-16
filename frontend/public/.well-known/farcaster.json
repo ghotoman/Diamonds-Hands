@@ -23,6 +23,11 @@
     "ogImageUrl": "__APP_URL__/og.png",
     "primaryCategory": "finance",
     "tags": ["defi", "base", "hodl", "lock", "erc20"],
+    "screenshotUrls": [
+      "__APP_URL__/shot-1.png",
+      "__APP_URL__/shot-2.png",
+      "__APP_URL__/shot-3.png"
+    ],
     "requiredChains": ["eip155:8453"]
   }
 }
