@@ -281,7 +281,9 @@ async function main(): Promise<void> {
       (level === "CRITICAL"
         ? "Cap breached — multisig should PAUSE the factory now."
         : "Approaching cap — prepare to pause.");
-    await sendWebhook({ text, level, summary });
+    // `content` → Discord, `text` → Slack; structured fields for custom sinks.
+    // Sending all three keys makes one webhook URL work across the common channels.
+    await sendWebhook({ content: text, text, level, summary });
     console.error(text);
   }
 
