@@ -3,9 +3,8 @@ import { useAccount, useConnect, useSwitchChain } from "wagmi";
 import { useComposeCast, useIsInMiniApp, useMiniKit } from "@coinbase/onchainkit/minikit";
 import type { Address } from "viem";
 import type { Vault } from "./types";
-import { DAY, fmtNum, currentPenaltyPct, shortAddr } from "./lib/helpers";
+import { shortAddr } from "./lib/helpers";
 import { useTick } from "./lib/useTick";
-import { MOCK_VAULTS, MOCK_TOKENS } from "./lib/mock";
 import { CHAIN_ID, TARGET_CHAIN, explorerTx } from "./web3/contracts";
 import { FARCASTER_CONNECTOR_ID } from "./web3/config";
 import { useVaults } from "./web3/useVaults";
@@ -126,11 +125,6 @@ function TxOverlay({ tx, onClose, onRetry }: { tx: TxState; onClose: () => void;
   );
 }
 
-const randAddr = () =>
-  ("0x" +
-    Math.random().toString(16).slice(2, 6) +
-    Math.random().toString(16).slice(2, 38)) as Address;
-
 // ── Dashboard data states (live mode) ──────────────────────────────────────
 function ConnectGate({ onConnect, connecting }: { onConnect: () => void; connecting: boolean }) {
   return (
@@ -233,22 +227,6 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-const DESKTOP_MQ = "(min-width: 768px) and (pointer: fine)";
-/// Desktop = wide screen + mouse. Touch devices (phones, the Base App webview)
-/// are not, so the dev-shell chrome (fake status bar, demo toggle) hides there.
-function useIsDesktop() {
-  const [desktop, setDesktop] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(DESKTOP_MQ).matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(DESKTOP_MQ);
-    const onChange = () => setDesktop(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return desktop;
-}
-
 export default function App() {
   const now = useTick(1000);
 
@@ -278,14 +256,9 @@ export default function App() {
     }
   }, [inMiniApp, isConnected, connectors, connect]);
 
-  // Dev-shell chrome (fake status bar + demo toggle) only on desktop preview.
-  const isDesktop = useIsDesktop();
-
-  // data source: live on-chain reads, or the mock prototype (demo toggle)
-  const [demo, setDemo] = useState(false); // prototype only
-  const live = useVaults(!demo && isConnected && !wrongNetwork ? address : undefined);
-  const liveTokens = useTokens(!demo && isConnected && !wrongNetwork ? address : undefined);
-  const [mock, setMock] = useState<Vault[]>(MOCK_VAULTS); // demo data + mock writes
+  // data source: live on-chain reads
+  const live = useVaults(isConnected && !wrongNetwork ? address : undefined);
+  const liveTokens = useTokens(isConnected && !wrongNetwork ? address : undefined);
 
   const [screen, setScreen] = useState<"dashboard" | "create" | "vault">("dashboard");
   const [activeId, setActiveId] = useState<Address | null>(null);
@@ -297,11 +270,11 @@ export default function App() {
   });
   const [tx, setTx] = useState<TxState>(null);
 
-  const source = demo ? mock : live.vaults;
+  const source = live.vaults;
   const activeVault = source.find((v) => v.address === activeId);
 
   // Streak / last-check-in indexed from on-chain CheckedIn events (live only).
-  const liveEvents = useVaultEvents(!demo ? activeVault : undefined);
+  const liveEvents = useVaultEvents(activeVault);
 
   const actions = useVaultActions(setTx, () => {
     live.refetch();
@@ -309,7 +282,6 @@ export default function App() {
   });
   const renderVault = useMemo(() => {
     if (!activeVault) return undefined;
-    if (demo) return activeVault;
     if (liveEvents.isLoading) return activeVault;
     // RPC can't serve logs (degraded/error) → the streak is UNKNOWN, not zero.
     // VaultDetail renders "Streak unavailable" for that, so a true
@@ -321,10 +293,10 @@ export default function App() {
       lastCheckIn: unknown ? undefined : liveEvents.lastCheckIn,
       streakUnavailable: unknown,
     };
-  }, [activeVault, demo, liveEvents]);
+  }, [activeVault, liveEvents]);
 
   // is the dashboard showing a real list (vs. a gate/loading/error state)?
-  const dashReady = demo || (isConnected && !wrongNetwork && !live.isLoading && !live.isError);
+  const dashReady = isConnected && !wrongNetwork && !live.isLoading && !live.isError;
   const showCreateCta = screen === "dashboard" && dashReady && source.length > 0;
 
   const openVault = (id: string) => {
@@ -345,93 +317,10 @@ export default function App() {
     if (pick) connect({ connector: pick });
   };
 
-  // mock async tx runner — drives the same overlay as the live flow.
-  // DEMO MODE ONLY: live mode uses useVaultActions (real writeContract).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const runTx = (cfg: any) => {
-    const { steps, fail, onDone } = cfg;
-    let i = 0;
-    const hash = "0x" + Array.from({ length: 64 }, () => ((Math.random() * 16) | 0).toString(16)).join("");
-    const step = () => {
-      if (fail && i === (fail.at ?? steps.length - 1)) {
-        setTimeout(
-          () =>
-            setTx({
-              stage: "error",
-              ...failMsg(fail.kind),
-              errorKind: fail.kind,
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              _retry: () => {
-                const { fail: _f, ...rest } = cfg;
-                runTx(rest);
-              },
-            }),
-          900,
-        );
-        return;
-      }
-      if (i >= steps.length) {
-        setTx({ stage: "pending", title: "Transaction on-chain…", sub: "Confirming a block on Base", hash });
-        setTimeout(() => {
-          setTx({ stage: "success", ...cfg.success, hash });
-          onDone && onDone();
-        }, 1600);
-        return;
-      }
-      setTx({ stage: "wallet", ...steps[i], hash });
-      i++;
-      setTimeout(step, 1300);
-    };
-    step();
-  };
-
-  const failMsg = (kind: string) =>
-    ({
-      rejected: {
-        title: "Signature rejected",
-        error: "You rejected the transaction in your wallet. Nothing was charged — you can try again.",
-      },
-      gas: {
-        title: "Not enough gas",
-        error: "Not enough ETH for gas on Base. Top up and try again.",
-      },
-      approve: {
-        title: "Approve needed",
-        error: "Token access isn't approved yet. Approve first, then lock.",
-      },
-    })[kind] || { title: "Something went wrong", error: "The transaction failed. Try again." };
-
-  // ── action dispatch (demo = mock runner; live = real writes) ──
+  // ── action dispatch (live writes via useVaultActions) ──
   const onCreateSubmit = (form: CreateForm) => {
     setScreen("dashboard");
-    if (!demo) {
-      actions.createVault(form);
-      return;
-    }
-    const steps: Array<{ title: string; sub: string }> = [];
-    if (form.needsApprove)
-      steps.push({ title: `Approve access to ${form.token.sym}`, sub: "Confirm the approve in your wallet" });
-    steps.push({ title: "Confirm the lock", sub: "Open your wallet and sign" });
-    runTx({
-      steps,
-      success: { title: "Vault created 💎", sub: `${fmtNum(form.amount)} ${form.token.sym} locked for ${form.days} days` },
-      onDone: () => {
-        const fresh: Vault = {
-          address: randAddr(),
-          token: form.token,
-          amount: form.amount,
-          mode: form.mode,
-          startPenalty: form.penalty,
-          start: Date.now(),
-          unlock: Date.now() + form.days * DAY,
-          status: "active",
-          currentPenalty: form.penalty ?? 0,
-          checkIns: 0,
-          lastCheckIn: 0,
-        };
-        setMock((vs) => [fresh, ...vs]);
-      },
-    });
+    actions.createVault(form);
   };
 
   const onVaultAction = (kind: ActionKind, v: Vault) => {
@@ -444,74 +333,23 @@ export default function App() {
       return;
     }
     if (kind === "checkin") {
-      if (!demo) {
-        actions.checkIn(v);
-        return;
-      }
-      setMock((vs) =>
-        vs.map((x) => (x.address === v.address ? { ...x, checkIns: (x.checkIns ?? 0) + 1, lastCheckIn: Date.now() } : x)),
-      );
+      actions.checkIn(v);
       return;
     }
     if (kind === "withdraw") {
-      if (!demo) {
-        actions.withdraw(v).then((ok) => ok && setScreen("dashboard"));
-        return;
-      }
-      runTx({
-        steps: [{ title: "Confirm withdrawal", sub: "Sign the withdrawal in your wallet" }],
-        success: { title: "Withdrawn ✓", sub: `${fmtNum(v.amount)} ${v.token.sym} in your wallet` },
-        onDone: () => {
-          setMock((vs) => vs.map((x) => (x.address === v.address ? { ...x, status: "withdrawn" } : x)));
-          setScreen("dashboard");
-        },
-      });
+      actions.withdraw(v).then((ok) => ok && setScreen("dashboard"));
     }
   };
 
   const confirmSheet = (kind: "topup" | "extend", v: Vault, num: number) => {
     setSheet({ open: false, kind: null, v: null });
-    if (!demo) {
-      if (kind === "topup") actions.topUp(v, num);
-      else actions.extendLock(v, num);
-      return;
-    }
-    runTx({
-      steps: [{ title: kind === "topup" ? "Confirm top-up" : "Confirm extension", sub: "Sign in your wallet" }],
-      success:
-        kind === "topup"
-          ? { title: "Topped up ✓", sub: `+${fmtNum(num)} ${v.token.sym} in the vault` }
-          : { title: "Term extended ✓", sub: `+${num} days added` },
-      onDone: () => {
-        setMock((vs) =>
-          vs.map((x) =>
-            x.address === v.address
-              ? kind === "topup"
-                ? { ...x, amount: x.amount + num }
-                : { ...x, unlock: x.unlock + num * DAY }
-              : x,
-          ),
-        );
-      },
-    });
+    if (kind === "topup") actions.topUp(v, num);
+    else actions.extendLock(v, num);
   };
 
   const confirmEmergency = (v: Vault) => {
     setEmergency(null);
-    if (!demo) {
-      actions.emergencyWithdraw(v).then((ok) => ok && setScreen("dashboard"));
-      return;
-    }
-    const pen = currentPenaltyPct(v, now);
-    const receive = v.amount * (1 - pen / 100);
-    runTx({
-      steps: [{ title: "Confirm early exit", sub: "Sign the penalized transaction" }],
-      success: { title: "Exit done", sub: `Received ${fmtNum(receive)} ${v.token.sym} (penalty ${pen.toFixed(1)}%)` },
-      onDone: () => {
-        setMock((vs) => vs.map((x) => (x.address === v.address ? { ...x, status: "withdrawn" } : x)));
-        setScreen("dashboard");
-      },
-    });
+    actions.emergencyWithdraw(v).then((ok) => ok && setScreen("dashboard"));
   };
 
   const retry = () => {
@@ -522,26 +360,6 @@ export default function App() {
 
   return (
     <div className="dh-phone font-sans">
-      {/* iOS status bar — desktop dev shell only (a real device shows its own) */}
-      {isDesktop && (
-        <div className="h-[26px] px-6 flex items-center justify-between text-[12px] font-semibold text-ink shrink-0 select-none">
-          <span>9:41</span>
-          <span className="flex items-center gap-1.5">
-            <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor">
-              <rect x="0" y="6" width="3" height="5" rx="1" />
-              <rect x="4.5" y="4" width="3" height="7" rx="1" />
-              <rect x="9" y="2" width="3" height="9" rx="1" />
-              <rect x="13.5" y="0" width="3" height="11" rx="1" />
-            </svg>
-            <svg width="24" height="11" viewBox="0 0 24 11" fill="none">
-              <rect x=".5" y=".5" width="20" height="10" rx="3" stroke="currentColor" opacity=".4" />
-              <rect x="2" y="2" width="16" height="7" rx="1.5" fill="currentColor" />
-              <rect x="21.5" y="3.5" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".4" />
-            </svg>
-          </span>
-        </div>
-      )}
-
       {/* Base App host bar */}
       <div className="h-12 px-3 flex items-center justify-between border-b border-line shrink-0 bg-white/80 backdrop-blur">
         <button
@@ -554,12 +372,7 @@ export default function App() {
           <Logo size={26} />
           <span className="text-[16px] font-bold text-ink tracking-tight">Diamond Hands</span>
         </button>
-        {demo ? (
-          <div className="flex items-center gap-1.5 rounded-full bg-surface border border-line pl-2 pr-2.5 h-8">
-            <span className="w-4 h-4 rounded-full" style={{ background: "linear-gradient(135deg,#3D3DFF,#0000FF)" }} />
-            <span className="text-[12px] font-semibold text-ink tabular-nums">0x7a…c4</span>
-          </div>
-        ) : isConnected ? (
+        {isConnected ? (
           <div className="flex items-center gap-1.5 rounded-full bg-surface border border-line pl-2 pr-2.5 h-8">
             <span
               className="w-4 h-4 rounded-full"
@@ -581,9 +394,7 @@ export default function App() {
       {/* scrollable app surface */}
       <div className="dh-surface flex-1 overflow-y-auto relative bg-white">
         {screen === "dashboard" &&
-          (demo ? (
-            <Dashboard vaults={mock} now={now} onOpen={openVault} onCreate={() => setScreen("create")} />
-          ) : !isConnected ? (
+          (!isConnected ? (
             <ConnectGate onConnect={onConnect} connecting={connecting} />
           ) : wrongNetwork ? (
             <SwitchPrompt onSwitch={() => switchChain({ chainId: CHAIN_ID })} switching={switching} />
@@ -598,8 +409,8 @@ export default function App() {
           <CreateFlow
             onCancel={() => setScreen("dashboard")}
             onSubmit={onCreateSubmit}
-            tokens={demo ? MOCK_TOKENS : liveTokens}
-            allowCustom={!demo}
+            tokens={liveTokens}
+            allowCustom
           />
         )}
         {screen === "vault" && renderVault && (
@@ -616,16 +427,6 @@ export default function App() {
           </div>
         )}
       </div>
-
-      {/* demo toggle (prototype/dev only — desktop preview) */}
-      {isDesktop && screen === "dashboard" && (
-        <button
-          onClick={() => setDemo((d) => !d)}
-          className="absolute top-1 left-1/2 -translate-x-1/2 z-50 text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-ink/70 text-white/90 backdrop-blur"
-        >
-          {demo ? "◍ demo data" : "◍ live"}
-        </button>
-      )}
 
       <EmergencyModal open={!!emergency} v={emergency} now={now} onClose={() => setEmergency(null)} onConfirm={confirmEmergency} />
       <ActionSheet
