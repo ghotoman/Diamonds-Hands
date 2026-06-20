@@ -5,7 +5,7 @@ import type { Address } from "viem";
 import type { Vault } from "./types";
 import { shortAddr } from "./lib/helpers";
 import { useTick } from "./lib/useTick";
-import { CHAIN_ID, TARGET_CHAIN, explorerTx } from "./web3/contracts";
+import { BRAG_ADDRESS, CHAIN_ID, REGISTRY_ADDRESS, TARGET_CHAIN, explorerTx } from "./web3/contracts";
 import { FARCASTER_CONNECTOR_ID } from "./web3/config";
 import { useVaults } from "./web3/useVaults";
 import { useTokens } from "./web3/useTokens";
@@ -18,7 +18,8 @@ import { Button } from "./components/Button";
 import { Spinner } from "./components/Spinner";
 import { Dashboard } from "./screens/Dashboard";
 import { CreateFlow, type CreateForm } from "./screens/CreateFlow";
-import { VaultDetail, EmergencyModal, ActionSheet, type ActionKind } from "./screens/VaultDetail";
+import { VaultDetail, EmergencyModal, ActionSheet, BragModal, type ActionKind } from "./screens/VaultDetail";
+import { ProfileModal } from "./components/ProfileModal";
 
 // ── Transaction overlay: wallet → pending → success | error ──
 function TxOverlay({ tx, onClose, onRetry }: { tx: TxState; onClose: () => void; onRetry: () => void }) {
@@ -263,6 +264,8 @@ export default function App() {
   const [screen, setScreen] = useState<"dashboard" | "create" | "vault">("dashboard");
   const [activeId, setActiveId] = useState<Address | null>(null);
   const [emergency, setEmergency] = useState<Vault | null>(null);
+  const [bragV, setBragV] = useState<Vault | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [sheet, setSheet] = useState<{ open: boolean; kind: "topup" | "extend" | null; v: Vault | null }>({
     open: false,
     kind: null,
@@ -336,9 +339,23 @@ export default function App() {
       actions.checkIn(v);
       return;
     }
+    if (kind === "brag") {
+      setBragV(v);
+      return;
+    }
     if (kind === "withdraw") {
       actions.withdraw(v).then((ok) => ok && setScreen("dashboard"));
     }
+  };
+
+  const confirmBrag = (v: Vault, memo: string) => {
+    setBragV(null);
+    actions.brag(v, memo);
+  };
+
+  const confirmProfile = (name: string, link: string) => {
+    setProfileOpen(false);
+    actions.setProfile(name, link);
   };
 
   const confirmSheet = (kind: "topup" | "extend", v: Vault, num: number) => {
@@ -373,13 +390,17 @@ export default function App() {
           <span className="text-[16px] font-bold text-ink tracking-tight">Diamond Hands</span>
         </button>
         {isConnected ? (
-          <div className="flex items-center gap-1.5 rounded-full bg-surface border border-line pl-2 pr-2.5 h-8">
+          <button
+            onClick={() => REGISTRY_ADDRESS && setProfileOpen(true)}
+            disabled={!REGISTRY_ADDRESS}
+            className="flex items-center gap-1.5 rounded-full bg-surface border border-line pl-2 pr-2.5 h-8 active:scale-95 disabled:active:scale-100"
+          >
             <span
               className="w-4 h-4 rounded-full"
               style={{ background: wrongNetwork ? "#F59E0B" : "linear-gradient(135deg,#3D3DFF,#0000FF)" }}
             />
             <span className="text-[12px] font-semibold text-ink tabular-nums">{shortAddr(address)}</span>
-          </div>
+          </button>
         ) : (
           <button
             onClick={onConnect}
@@ -414,7 +435,13 @@ export default function App() {
           />
         )}
         {screen === "vault" && renderVault && (
-          <VaultDetail v={renderVault} now={now} onBack={() => setScreen("dashboard")} onAction={onVaultAction} />
+          <VaultDetail
+            v={renderVault}
+            now={now}
+            onBack={() => setScreen("dashboard")}
+            onAction={onVaultAction}
+            canBrag={!!BRAG_ADDRESS}
+          />
         )}
 
         {/* sticky create CTA on dashboard */}
@@ -429,6 +456,8 @@ export default function App() {
       </div>
 
       <EmergencyModal open={!!emergency} v={emergency} now={now} onClose={() => setEmergency(null)} onConfirm={confirmEmergency} />
+      <BragModal open={!!bragV} v={bragV} onClose={() => setBragV(null)} onConfirm={confirmBrag} />
+      <ProfileModal open={profileOpen} address={address} onClose={() => setProfileOpen(false)} onConfirm={confirmProfile} />
       <ActionSheet
         open={sheet.open}
         kind={sheet.kind}

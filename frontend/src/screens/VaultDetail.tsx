@@ -22,18 +22,21 @@ import { Label } from "../components/Label";
 import { Modal } from "../components/Modal";
 import { PenaltyCurve } from "../components/PenaltyCurve";
 
-export type ActionKind = "withdraw" | "emergency" | "topup" | "extend" | "checkin";
+export type ActionKind = "withdraw" | "emergency" | "topup" | "extend" | "checkin" | "brag";
 
 export function VaultDetail({
   v,
   now,
   onBack,
   onAction,
+  canBrag = false,
 }: {
   v: Vault;
   now: number;
   onBack: () => void;
   onAction: (kind: ActionKind, v: Vault) => void;
+  /// show the on-chain "Brag" action (only where DiamondHandsBrag is deployed)
+  canBrag?: boolean;
 }) {
   const unlocked = isUnlocked(v, now);
   const prog = vaultProgress(v, now);
@@ -176,6 +179,16 @@ export function VaultDetail({
             )}
           </div>
         )}
+        {canBrag && v.status !== "withdrawn" && (
+          <Button
+            variant="ghost"
+            className="w-full mt-2.5 text-sub hover:text-ink"
+            onClick={() => onAction("brag", v)}
+          >
+            <Icon name="flame" size={18} />
+            Brag about this lock
+          </Button>
+        )}
       </div>
 
       {/* on-chain proof */}
@@ -258,6 +271,48 @@ export function EmergencyModal({
           Exit anyway and lose {fmtNum(penaltyTokens)} {v.token.sym}
         </Button>
       </div>
+    </Modal>
+  );
+}
+
+// ── Brag modal — post a public on-chain note tied to a vault ──
+export function BragModal({
+  open,
+  v,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  v: Vault | null;
+  onClose: () => void;
+  onConfirm: (v: Vault, memo: string) => void;
+}) {
+  const [memo, setMemo] = useState("");
+  useEffect(() => {
+    if (open) setMemo("");
+  }, [open]);
+  if (!v) return null;
+  const used = new TextEncoder().encode(memo).length;
+  const MAX = 280;
+  const over = used > MAX;
+  return (
+    <Modal open={open} onClose={onClose}>
+      <h2 className="text-[22px] font-bold text-ink leading-tight">Brag about your lock</h2>
+      <p className="mt-1 text-[14px] text-sub">
+        Post a public, on-chain note tied to this vault — proof you locked and meant it.
+      </p>
+      <textarea
+        value={memo}
+        onChange={(e) => setMemo(e.target.value)}
+        placeholder={`Locked ${fmtNum(v.amount)} ${v.token.sym} — no paper hands 💎`}
+        rows={3}
+        className="mt-4 w-full resize-none rounded-2xl border border-line bg-surface p-4 text-[15px] text-ink outline-none focus:border-baseblue"
+      />
+      <div className={"mt-1 text-right text-[12px] " + (over ? "text-danger" : "text-sub")}>{MAX - used} left</div>
+      <Button className="w-full mt-3" disabled={over} onClick={() => onConfirm(v, memo)}>
+        <Icon name="flame" size={18} />
+        Brag on-chain
+      </Button>
     </Modal>
   );
 }

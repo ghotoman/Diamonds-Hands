@@ -4,8 +4,10 @@ import type { Address } from "viem";
 import { factoryAbi } from "./abi/factory";
 import { vaultAbi } from "./abi/vault";
 import { erc20Abi } from "./abi/erc20";
+import { bragAbi } from "./abi/brag";
+import { registryAbi } from "./abi/registry";
 
-export { factoryAbi, vaultAbi, erc20Abi };
+export { factoryAbi, vaultAbi, erc20Abi, bragAbi, registryAbi };
 
 /// Target network — Base mainnet by default. Set VITE_USE_TESTNET=1 to point
 /// the entire app at Base Sepolia (QA / testnet release). All chain-specific
@@ -27,6 +29,9 @@ type ChainAddrs = {
   weth: Address;
   /// previous factory deployments (read-only; vaults from there stay visible)
   legacy: Address[];
+  /// optional post-launch extras (only on chains where they're deployed)
+  brag?: Address;
+  registry?: Address;
 };
 
 const MAINNET: ChainAddrs = {
@@ -38,6 +43,10 @@ const MAINNET: ChainAddrs = {
   vaultImpl: "0x2391CDBAC7Be38FC72E7bA7609157a3e2e6B823e" as Address,
   weth: "0x4200000000000000000000000000000000000006" as Address,
   legacy: [],
+  // Extras deployed 2026-06-16 (verified). Addresses by verifier/ctor-args
+  // (forge summary mislabels them); see docs/deploy.md.
+  brag: "0xD41FA9D180187C79E220A1C5968Da8E145646f07" as Address,
+  registry: "0xE0a0836f19d604e3aEEf1c55a59e50e1cE806cC3" as Address,
 };
 
 const TESTNET: ChainAddrs = {
@@ -67,6 +76,11 @@ export const FACTORY_ADDRESSES: Address[] = [FACTORY_ADDRESS, ...legacyList].fil
 
 export const VAULT_IMPL_ADDRESS = DEFAULTS.vaultImpl;
 export const WETH_ADDRESS = DEFAULTS.weth;
+
+/// Post-launch extras — undefined on chains where they aren't deployed
+/// (e.g. testnet), so the UI hides the related features there.
+export const BRAG_ADDRESS = DEFAULTS.brag;
+export const REGISTRY_ADDRESS = DEFAULTS.registry;
 
 /// Protocol limits — client-side fallbacks. The UI reads the live values from
 /// the factory (useFactoryLimits); these apply only when that read fails.
