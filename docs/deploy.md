@@ -543,3 +543,18 @@ threshold'ом. После паузы новые вольты создавать
   `same-origin-allow-popups` выставлен (vercel.json/netlify.toml).
 - ✅ **Mini App опубликован, домен verified** (FID 328804). Universal-link для
   шеринга в X/Telegram: <https://farcaster.xyz/miniapps/eAC5uX9rFXVs/diamond-hands>
+
+#### Extras (задеплоено 2026-06-16, deployer 0x51eEE…468e30, все verified)
+
+`script/DeployExtras.s.sol`. ⚠️ Лейблы в summary форджа перепутаны — ниже
+адреса по constructor-args + verifier (источник истины):
+
+| Контракт | Адрес | Назначение |
+| --- | --- | --- |
+| DiamondHandsLens | `0x801791998BB8aFedEb68D9C345C5B0f32301eE3c` | view-агрегатор вольтов (ctor: factory `0x89de…`) |
+| DiamondHandsBrag | `0xD41FA9D180187C79E220A1C5968Da8E145646f07` | соц-event `brag(vault, memo)` |
+| DiamondHandsRegistry | `0xE0a0836f19d604e3aEEf1c55a59e50e1cE806cC3` | профиль `setProfile(name, link)` |
+| TimelockController | `0xa7FC9b2b434f4CA93a5136760b8A09F229fF3f60` | governance-задел, 48h, proposer/executor = Safe `0x1Cc4…`; пока idle (ничем не владеет) |
+
+> Brag/Registry-адреса совпадают с Sepolia v2 (детерминированный CREATE,
+> разные сети — конфликта нет).
