@@ -4,7 +4,16 @@ import { parseUnits, type Address } from "viem";
 import type { Vault } from "../types";
 import type { CreateForm } from "../screens/CreateFlow";
 import { currentPenaltyPct, fmtNum } from "../lib/helpers";
-import { FACTORY_ADDRESS, erc20Abi, factoryAbi, vaultAbi } from "./contracts";
+import {
+  BRAG_ADDRESS,
+  FACTORY_ADDRESS,
+  REGISTRY_ADDRESS,
+  bragAbi,
+  erc20Abi,
+  factoryAbi,
+  registryAbi,
+  vaultAbi,
+} from "./contracts";
 import { DATA_SUFFIX } from "./attribution";
 import { useFactoryLimits } from "./useFactoryLimits";
 import { parseTxError, type SetTx, type ShareCast } from "./tx";
@@ -243,5 +252,57 @@ export function useVaultActions(setTx: SetTx, onSettled?: () => void) {
     [runFlow, writeContractAsync],
   );
 
-  return { createVault, withdraw, emergencyWithdraw, topUp, extendLock, checkIn };
+  /// Post a public on-chain "brag" tagged to a vault (DiamondHandsBrag).
+  const brag = useCallback(
+    (v: Vault, memo: string): Promise<boolean> => {
+      const addr = BRAG_ADDRESS;
+      if (!addr) return Promise.resolve(notReady());
+      return runFlow({
+        steps: [
+          {
+            title: "Brag on-chain",
+            sub: "Sign to post your commitment",
+            send: () =>
+              writeContractAsync({
+                address: addr,
+                abi: bragAbi,
+                functionName: "brag",
+                args: [v.address, memo],
+                dataSuffix: DATA_SUFFIX,
+              }),
+          },
+        ],
+        success: { title: "Bragged 💎", sub: "Your commitment is on-chain" },
+      });
+    },
+    [runFlow, writeContractAsync, notReady],
+  );
+
+  /// Set the caller's on-chain profile (DiamondHandsRegistry).
+  const setProfile = useCallback(
+    (name: string, link: string): Promise<boolean> => {
+      const addr = REGISTRY_ADDRESS;
+      if (!addr) return Promise.resolve(notReady());
+      return runFlow({
+        steps: [
+          {
+            title: "Save profile",
+            sub: "Sign to update your on-chain profile",
+            send: () =>
+              writeContractAsync({
+                address: addr,
+                abi: registryAbi,
+                functionName: "setProfile",
+                args: [name, link],
+                dataSuffix: DATA_SUFFIX,
+              }),
+          },
+        ],
+        success: { title: "Profile saved ✓", sub: "Your name is on-chain" },
+      });
+    },
+    [runFlow, writeContractAsync, notReady],
+  );
+
+  return { createVault, withdraw, emergencyWithdraw, topUp, extendLock, checkIn, brag, setProfile };
 }
